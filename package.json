@@ -1,0 +1,25 @@
+{
+  "name": "nklient",
+  "version": "0.0.1",
+  "description": "Http request client in NodeJS",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nitishagar/nklient.git"
+  },
+  "keywords": [
+    "request",
+    "http",
+    "https",
+    "client"
+  ],
+  "author": "nitishagar",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/nitishagar/nklient/issues"
+  },
+  "homepage": "https://github.com/nitishagar/nklient#readme"
+}
