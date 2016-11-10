@@ -20,8 +20,7 @@ let client = (params, resolve, reject) => {
     };
 
     if (params.postData){
-        settings.params = JSON.stringify(params.postData);
-        settings.headers['Content-Type'] = 'application/json';
+        settings.params = params.postData;
         settings.headers['Content-Length'] = params.postData.length;
     };
 
@@ -107,6 +106,15 @@ nklient.headers = (key, val) => {
     extend(nklient.options, {headers});
     return nklient;
 };
+
+nklient.postBody = (body, encoding) => {
+    if (typeof body === 'string' || body instanceof String) {
+        extend(nklient.options, { postData: body, encoding: encoding || 'utf-8' })
+    } else {
+        extend(nklient.options, { postData: JSON.stringify(body), encoding: encoding || 'utf-8' }) 
+    }
+    return nklient;
+}
 
 nklient.timeout = (timeout) => {
     extend(nklient.options, {timeout});
