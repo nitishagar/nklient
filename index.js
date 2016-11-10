@@ -27,7 +27,13 @@ let client = (params, resolve, reject) => {
     let req = http.request(settings);
 
     if (settings.params) { req.write(settings.params); }
-    if (params.timeout) { req.setTimeout(params.timeout, () => req.abort()); }
+    if (params.timeout) { 
+        req.setTimeout(params.timeout, () => {
+            let err = new Error('ETIMEDOUT');
+            err.code = 'ETIMEDOUT';
+            reject(err);
+        }); 
+    }
 
     req.on('response', function(res){
         if (res.statusCode >= 300 && res.statusCode < 400 && 'location' in res.headers) {

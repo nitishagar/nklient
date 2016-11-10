@@ -28,14 +28,12 @@ describe('Nklient', function () {
       })
     })
 
-    // it('should correctly handle timeouts.', (done) => {
-    //   nklient.get('http://mockbin.com/redirect/3').timeout(20).exec().then((response) => {
-    //       console.log(response);
-    //     response.error.should.exist
-    //     response.error.code.should.equal('ETIMEDOUT')
-    //     done()
-    //   }).catch((err) => {console.log(err); done()})
-    // })
+    it('should correctly handle timeouts.', (done) => {
+      nklient.get('http://mockbin.com/delay/5000').timeout(20).exec().catch((error) => {
+        error.should.exist
+        error.code.should.equal('ETIMEDOUT') 
+        done()})
+    })
 
     // it('should correctly handle timeouts with 3 retries.', (done) => {
     //   var retryCount = 0;
