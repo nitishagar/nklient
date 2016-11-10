@@ -27,3 +27,8 @@ promiedResp.then((response) => {
   }
 }).catch((err) => console.error(err.message));
 ```
+
+### TODO
+- Handle https request.
+- Cookie 
+- Retry logic
