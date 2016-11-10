@@ -9,6 +9,7 @@ const extend = require('./util').extend;
 const nklient = {};
 const keepAliveAgent = new http.Agent({ keepAlive: true }); 
 
+// TODO: move this to seperate file (much like handler - inject params)
 let client = (params, resolve, reject) => {
     let reqURI = url.parse(params.uri);
     var settings = {
