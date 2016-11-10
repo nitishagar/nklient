@@ -15,3 +15,15 @@ promiedResp.then((response) => {
   }
 }).catch((err) => console.error(err.message));
 ```
+
+### POST example
+```
+const nklient = require('nklient');
+const promisedResp = nklient.post('http://mockbin.com/echo').headers('Accept', 'application/json').postBody({foo: "bar"}).exec();
+
+promiedResp.then((response) => {
+  if (response.statusCode == 200) {
+    console.log(response.body.foo); //'bar'
+  }
+}).catch((err) => console.error(err.message));
+```
