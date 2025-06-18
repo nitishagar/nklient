@@ -151,6 +151,23 @@ const client = async params => {
 
         // Handle redirects
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          // Check if redirects are disabled
+          if (requestOptions.followRedirects === false) {
+            // Don't follow redirect, just return the response
+            const response = {
+              statusCode: res.statusCode,
+              headers: res.headers,
+              body: '',
+              request: {
+                uri: requestOptions.uri,
+                method: requestOptions.method,
+                headers: settings.headers
+              }
+            };
+            resolve(response);
+            return;
+          }
+          
           if (redirectCount >= requestOptions.maxRedirects) {
             reject(new Error('Maximum redirects exceeded'));
             return;
@@ -194,12 +211,14 @@ const client = async params => {
         let responseStream = res;
         const encoding = res.headers['content-encoding'];
 
-        if (encoding === 'gzip') {
-          responseStream = res.pipe(zlib.createGunzip());
-        } else if (encoding === 'deflate') {
-          responseStream = res.pipe(zlib.createInflate());
-        } else if (encoding === 'br') {
-          responseStream = res.pipe(zlib.createBrotliDecompress());
+        if (requestOptions.decompress !== false && encoding) {
+          if (encoding === 'gzip') {
+            responseStream = res.pipe(zlib.createGunzip());
+          } else if (encoding === 'deflate') {
+            responseStream = res.pipe(zlib.createInflate());
+          } else if (encoding === 'br') {
+            responseStream = res.pipe(zlib.createBrotliDecompress());
+          }
         }
 
         // Collect response data
@@ -218,7 +237,7 @@ const client = async params => {
             } catch (e) {
               // Keep as buffer if JSON parsing fails
             }
-          } else if (!requestOptions.encoding || requestOptions.encoding !== null) {
+          } else if (requestOptions.encoding !== null) {
             body = body.toString(requestOptions.encoding || 'utf8');
           }
 
@@ -589,9 +608,10 @@ nklient.createClient = config => {
 
   // Helper to build options from config
   const buildOptions = (method, uri, additionalOptions = {}) => {
+    const fullUri = finalConfig.baseUrl ? new URL(uri, finalConfig.baseUrl).toString() : uri;
     const options = {
       method: method.toUpperCase(),
-      uri: finalConfig.baseUrl ? new URL(uri, finalConfig.baseUrl).toString() : uri,
+      uri: fullUri,
       headers: extend({}, finalConfig.defaultHeaders, additionalOptions.headers || {}),
       timeout: additionalOptions.timeout || finalConfig.timeout,
       maxRedirects: finalConfig.maxRedirects,
@@ -600,7 +620,8 @@ nklient.createClient = config => {
       followRedirects: finalConfig.followRedirects,
       decompress: finalConfig.decompress,
       keepAlive: finalConfig.keepAlive,
-      ...additionalOptions
+      ...additionalOptions,
+      uri: fullUri  // Ensure the resolved URI is not overwritten
     };
 
     return options;
@@ -625,18 +646,18 @@ nklient.createClient = config => {
     request: {
       use: interceptor => {
         // Client-specific interceptors would go here
-        return interceptors.request.use(interceptor);
+        return nklient.interceptors.request.use(interceptor);
       },
       eject: id => {
-        interceptors.request.eject(id);
+        nklient.interceptors.request.eject(id);
       }
     },
     response: {
       use: interceptor => {
-        return interceptors.response.use(interceptor);
+        return nklient.interceptors.response.use(interceptor);
       },
       eject: id => {
-        interceptors.response.eject(id);
+        nklient.interceptors.response.eject(id);
       }
     }
   };
