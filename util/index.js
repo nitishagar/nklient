@@ -1,19 +1,20 @@
-let isJSON = (str) => {
-    try {
-        JSON.parse(str);
-    } catch (e) {
-        return false;
-    }
-    return true;
-}
+const isJSON = contentType => {
+  if (!contentType) return false;
+  return contentType.includes('application/json');
+};
 
-let extend = function(destination, source) {
-    for (var property in source)
-        destination[property] = source[property];
-    return destination;
-}
+const extend = function (destination, ...sources) {
+  for (const source of sources) {
+    if (source) {
+      for (const property in source) { 
+        destination[property] = source[property]; 
+      }
+    }
+  }
+  return destination;
+};
 
 module.exports = {
-    extend,
-    isJSON
+  extend,
+  isJSON
 };
