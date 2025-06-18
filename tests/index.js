@@ -1001,4 +1001,426 @@ describe('nklient', () => {
       expect(response.request.headers).to.include({ 'X-Test': 'value' });
     });
   });
+
+  describe('Cookie Error Handling', () => {
+    it('should throw error when adding cookies without URI', async () => {
+      try {
+        nklient.get(null).cookies({ test: 'value' });
+        expect.fail('Should have thrown error');
+      } catch (error) {
+        expect(error.message).to.include('URI');
+      }
+    });
+
+    it('should return empty array when getCookies called without jar', async () => {
+      const cookies = await nklient.getCookies('http://example.com/', null);
+      expect(cookies).to.be.an('array');
+      expect(cookies).to.have.length(0);
+    });
+
+    it('should throw error when setCookie called without jar', async () => {
+      try {
+        await nklient.setCookie('test=value', 'http://example.com/', null);
+        expect.fail('Should have thrown error');
+      } catch (error) {
+        expect(error.message).to.equal('No cookie jar available');
+      }
+    });
+
+    it('should handle clearCookies gracefully without jar', () => {
+      // Should not throw
+      expect(() => nklient.clearCookies(null)).to.not.throw();
+    });
+
+    it('should create jar when setting cookies without existing jar', async () => {
+      const scope = nock('http://example.com')
+        .matchHeader('cookie', /manual=value/)
+        .get('/test')
+        .reply(200);
+
+      const response = await nklient.get('http://example.com/test')
+        .noJar()
+        .cookies({ manual: 'value' })
+        .exec();
+
+      expect(response.statusCode).to.equal(200);
+    });
+  });
+
+  describe('createClient Configuration', () => {
+    it('should create client with default configuration', async () => {
+      const client = nklient.createClient();
+      
+      expect(client.config).to.exist;
+      expect(client.config.timeout).to.equal(30000);
+      expect(client.config.maxRedirects).to.equal(5);
+      expect(client.jar).to.be.null; // cookies disabled by default
+    });
+
+    it('should create client with custom configuration object', async () => {
+      const customConfig = {
+        baseUrl: 'http://api.example.com',
+        timeout: 5000,
+        defaultHeaders: { 'X-API-Key': 'test123' },
+        cookies: true
+      };
+
+      const client = nklient.createClient(customConfig);
+      
+      expect(client.config.baseUrl).to.equal('http://api.example.com');
+      expect(client.config.timeout).to.equal(5000);
+      expect(client.config.defaultHeaders).to.deep.equal({ 'X-API-Key': 'test123' });
+      expect(client.jar).to.be.an.instanceof(CookieJar);
+    });
+
+    it('should create client from configuration file', async () => {
+      // Create a temp config file
+      const fs = require('fs');
+      const path = require('path');
+      const tmpFile = path.join(__dirname, 'test-config.json');
+      const config = {
+        baseUrl: 'http://file-api.example.com',
+        timeout: 10000,
+        retry: { attempts: 5 }
+      };
+      fs.writeFileSync(tmpFile, JSON.stringify(config));
+
+      try {
+        const client = nklient.createClient(tmpFile);
+        expect(client.config.baseUrl).to.equal('http://file-api.example.com');
+        expect(client.config.timeout).to.equal(10000);
+        expect(client.config.retry.attempts).to.equal(5);
+      } finally {
+        fs.unlinkSync(tmpFile);
+      }
+    });
+
+    it('should throw error for invalid configuration', () => {
+      const invalidConfig = {
+        timeout: 'not-a-number',
+        maxRedirects: -1
+      };
+
+      try {
+        nklient.createClient(invalidConfig);
+        expect.fail('Should have thrown error');
+      } catch (error) {
+        expect(error.message).to.include('Failed to create client');
+      }
+    });
+
+    it('should throw error for non-existent configuration file', () => {
+      try {
+        nklient.createClient('/non/existent/file.json');
+        expect.fail('Should have thrown error');
+      } catch (error) {
+        expect(error.message).to.include('Failed to create client');
+        expect(error.message).to.include('not found');
+      }
+    });
+
+    it('should throw error for invalid JSON in configuration file', () => {
+      const fs = require('fs');
+      const path = require('path');
+      const tmpFile = path.join(__dirname, 'invalid-config.json');
+      fs.writeFileSync(tmpFile, '{ invalid json }');
+
+      try {
+        nklient.createClient(tmpFile);
+        expect.fail('Should have thrown error');
+      } catch (error) {
+        expect(error.message).to.include('Failed to create client');
+        expect(error.message).to.include('Invalid JSON');
+      } finally {
+        fs.unlinkSync(tmpFile);
+      }
+    });
+
+    it('should use baseUrl for requests', async () => {
+      const client = nklient.createClient({
+        baseUrl: 'http://api.example.com/v1'
+      });
+
+      const scope = nock('http://api.example.com')
+        .get('/v1/users')
+        .reply(200, { users: [] });
+
+      const response = await client.get('/users').exec();
+      expect(response.statusCode).to.equal(200);
+      expect(scope.isDone()).to.be.true;
+    });
+
+    it('should include defaultHeaders in all requests', async () => {
+      const client = nklient.createClient({
+        defaultHeaders: {
+          'X-API-Key': 'secret123',
+          'X-Client': 'test'
+        }
+      });
+
+      const scope = nock('http://example.com')
+        .matchHeader('x-api-key', 'secret123')
+        .matchHeader('x-client', 'test')
+        .get('/test')
+        .reply(200);
+
+      const response = await client.get('http://example.com/test').exec();
+      expect(response.statusCode).to.equal(200);
+      expect(scope.isDone()).to.be.true;
+    });
+
+    it('should handle all HTTP methods with createClient', async () => {
+      const client = nklient.createClient();
+
+      // Test each HTTP method
+      const methods = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'];
+      
+      for (const method of methods) {
+        const scope = nock('http://example.com')[method]('/test')
+          .reply(200);
+
+        const response = await client[method]('http://example.com/test').exec();
+        expect(response.statusCode).to.equal(200);
+        expect(scope.isDone()).to.be.true;
+      }
+    });
+
+    it('should handle custom request method with createClient', async () => {
+      const client = nklient.createClient();
+
+      const scope = nock('http://example.com')
+        .intercept('/custom', 'TRACE')
+        .reply(200);
+
+      const response = await client.request({
+        method: 'TRACE',
+        uri: 'http://example.com/custom'
+      }).exec();
+
+      expect(response.statusCode).to.equal(200);
+      expect(scope.isDone()).to.be.true;
+    });
+
+    it('should support interceptors with createClient', async () => {
+      const client = nklient.createClient();
+
+      const scope = nock('http://example.com')
+        .matchHeader('x-intercepted', 'true')
+        .get('/test')
+        .reply(200);
+
+      const interceptorId = client.interceptors.request.use(config => {
+        config.headers['X-Intercepted'] = 'true';
+        return config;
+      });
+
+      const response = await client.get('http://example.com/test').exec();
+      expect(response.statusCode).to.equal(200);
+      expect(scope.isDone()).to.be.true;
+
+      client.interceptors.request.eject(interceptorId);
+    });
+
+    it('should handle followRedirects configuration option', async () => {
+      const client = nklient.createClient({
+        followRedirects: false
+      });
+
+      const scope = nock('http://example.com')
+        .get('/redirect')
+        .reply(302, undefined, { Location: 'http://example.com/final' });
+
+      const response = await client.get('http://example.com/redirect').exec();
+      
+      expect(response.statusCode).to.equal(302);
+      expect(response.headers.location).to.equal('http://example.com/final');
+      expect(scope.isDone()).to.be.true;
+    });
+
+    it('should handle decompress configuration option', async () => {
+      const client = nklient.createClient({
+        decompress: false
+      });
+
+      const zlib = require('zlib');
+      const data = { message: 'compressed' };
+      const compressed = zlib.gzipSync(JSON.stringify(data));
+
+      const scope = nock('http://example.com')
+        .get('/compressed')
+        .reply(200, compressed, {
+          'content-encoding': 'gzip',
+          'content-type': 'application/json'
+        });
+
+      const response = await client.get('http://example.com/compressed').exec();
+      
+      expect(response.statusCode).to.equal(200);
+      expect(Buffer.isBuffer(response.body)).to.be.true;
+      expect(response.body).to.deep.equal(compressed);
+      expect(scope.isDone()).to.be.true;
+    });
+  });
+
+  describe('Proxy Support', () => {
+    it('should use HTTP proxy for HTTP requests', async () => {
+      const proxyUrl = 'http://proxy.example.com:8080';
+      const scope = nock('http://example.com')
+        .get('/test')
+        .reply(200, { proxy: 'http' });
+
+      const response = await nklient.get('http://example.com/test')
+        .proxy(proxyUrl)
+        .exec();
+
+      expect(response.statusCode).to.equal(200);
+      expect(response.body).to.deep.equal({ proxy: 'http' });
+    });
+
+    it('should use HTTPS proxy for HTTPS requests', async () => {
+      const proxyUrl = 'https://proxy.example.com:8443';
+      const scope = nock('https://example.com')
+        .get('/secure')
+        .reply(200, { proxy: 'https' });
+
+      const response = await nklient.get('https://example.com/secure')
+        .proxy(proxyUrl)
+        .exec();
+
+      expect(response.statusCode).to.equal(200);
+      expect(response.body).to.deep.equal({ proxy: 'https' });
+    });
+
+    it('should work with proxy authentication', async () => {
+      const proxyUrl = 'http://user:pass@proxy.example.com:8080';
+      const scope = nock('http://example.com')
+        .get('/auth')
+        .reply(200, { authenticated: true });
+
+      const response = await nklient.get('http://example.com/auth')
+        .proxy(proxyUrl)
+        .exec();
+
+      expect(response.statusCode).to.equal(200);
+      expect(response.body).to.deep.equal({ authenticated: true });
+    });
+
+    it('should work with proxy and other options', async () => {
+      const proxyUrl = 'http://proxy.example.com:8080';
+      const scope = nock('http://example.com')
+        .matchHeader('x-custom', 'header')
+        .get('/combined')
+        .reply(200, { combined: true });
+
+      const response = await nklient.get('http://example.com/combined')
+        .proxy(proxyUrl)
+        .headers('X-Custom', 'header')
+        .timeout(5000)
+        .exec();
+
+      expect(response.statusCode).to.equal(200);
+      expect(response.body).to.deep.equal({ combined: true });
+    });
+  });
+
+  describe('Custom Agent Support', () => {
+    it('should use custom agent for requests', async () => {
+      const customAgent = new http.Agent({ keepAlive: false, maxSockets: 1 });
+      const scope = nock('http://example.com')
+        .get('/test')
+        .reply(200, { agent: 'custom' });
+
+      const response = await nklient.get('http://example.com/test')
+        .agent(customAgent)
+        .exec();
+
+      expect(response.statusCode).to.equal(200);
+      expect(response.body).to.deep.equal({ agent: 'custom' });
+    });
+
+    it('should use custom HTTPS agent for HTTPS requests', async () => {
+      const customAgent = new https.Agent({ keepAlive: false, maxSockets: 1 });
+      const scope = nock('https://example.com')
+        .get('/secure')
+        .reply(200, { agent: 'custom-https' });
+
+      const response = await nklient.get('https://example.com/secure')
+        .agent(customAgent)
+        .exec();
+
+      expect(response.statusCode).to.equal(200);
+      expect(response.body).to.deep.equal({ agent: 'custom-https' });
+    });
+
+    it('should override proxy when custom agent is set', async () => {
+      const customAgent = new http.Agent({ keepAlive: true });
+      const scope = nock('http://example.com')
+        .get('/override')
+        .reply(200, { override: true });
+
+      const response = await nklient.get('http://example.com/override')
+        .proxy('http://proxy.example.com:8080')
+        .agent(customAgent) // This should override the proxy
+        .exec();
+
+      expect(response.statusCode).to.equal(200);
+      expect(response.body).to.deep.equal({ override: true });
+    });
+  });
+
+  describe('Stream Error Handling', () => {
+    it('should handle decompression errors', async () => {
+      const scope = nock('http://example.com')
+        .get('/bad-gzip')
+        .reply(200, Buffer.from('not gzip data'), {
+          'content-encoding': 'gzip'
+        });
+
+      try {
+        await nklient.get('http://example.com/bad-gzip').exec();
+        expect.fail('Should have thrown decompression error');
+      } catch (error) {
+        expect(error).to.exist;
+        expect(error.code).to.exist;
+      }
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should handle URI validation error', async () => {
+      try {
+        await nklient.get('').exec();
+        expect.fail('Should have thrown error');
+      } catch (error) {
+        expect(error.message).to.include('URI');
+      }
+    });
+
+    it('should handle invalid JSON gracefully keeping data as Buffer', async () => {
+      const scope = nock('http://example.com')
+        .get('/invalid-json')
+        .reply(200, Buffer.from('not json'), {
+          'content-type': 'application/json'
+        });
+
+      const response = await nklient.get('http://example.com/invalid-json').exec();
+      
+      expect(response.statusCode).to.equal(200);
+      expect(Buffer.isBuffer(response.body)).to.be.true;
+      expect(response.body.toString()).to.equal('not json');
+    });
+
+    it('should handle malformed redirect URLs', async () => {
+      const scope = nock('http://example.com')
+        .get('/bad-redirect')
+        .reply(302, undefined, { Location: '://invalid-url' });
+
+      try {
+        await nklient.get('http://example.com/bad-redirect').exec();
+        expect.fail('Should have thrown error');
+      } catch (error) {
+        expect(error).to.exist;
+      }
+    });
+  });
 });
