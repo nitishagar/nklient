@@ -5,7 +5,8 @@ const sinon = require('sinon');
 const nock = require('nock');
 const nklient = require('../index');
 const { CookieJar } = require('tough-cookie');
-// const https = require('https'); // Not needed with nock
+const http = require('http');
+const https = require('https');
 const { Readable } = require('stream');
 
 describe('nklient', () => {
@@ -1383,6 +1384,338 @@ describe('nklient', () => {
         expect(error).to.exist;
         expect(error.code).to.exist;
       }
+    });
+  });
+
+  describe('Global Cookie Jar Functions', () => {
+    it('should use global cookie jar methods with jar parameter', async () => {
+      const jar = nklient.jar();
+      
+      // Test getCookies with jar returning cookies
+      await jar.setCookie('test=value', 'http://example.com');
+      const cookies = await nklient.getCookies('http://example.com', jar);
+      expect(cookies.length).to.be.greaterThan(0);
+      
+      // Test setCookie with jar
+      await nklient.setCookie('another=cookie', 'http://example.com', jar);
+      const updatedCookies = await nklient.getCookies('http://example.com', jar);
+      expect(updatedCookies.length).to.equal(2);
+      
+      // Test clearCookies with jar
+      nklient.clearCookies(jar);
+      const clearedCookies = await nklient.getCookies('http://example.com', jar);
+      expect(clearedCookies.length).to.equal(0);
+    });
+  });
+
+  describe('Global Defaults Configuration', () => {
+    it('should merge custom defaults with extend', async () => {
+      // Store original defaults
+      const originalTimeout = 30000;
+      
+      nklient.defaults({
+        headers: { 'X-Custom': 'value' },
+        timeout: 5000
+      });
+      
+      // Test that defaults were merged
+      const scope = nock('http://example.com')
+        .matchHeader('x-custom', 'value')
+        .get('/test')
+        .reply(200);
+      
+      const response = await nklient.get('http://example.com/test').exec();
+      expect(response.statusCode).to.equal(200);
+      
+      // Restore defaults
+      nklient.defaults({ timeout: originalTimeout });
+    });
+  });
+
+  describe('Custom Instance Creation', () => {
+    it('should create instance with merged defaults using extend', async () => {
+      const instance = nklient.create({
+        headers: { 'X-Instance': 'custom' },
+        timeout: 3000,
+        maxRedirects: 5
+      });
+      
+      const scope = nock('http://example.com')
+        .matchHeader('x-instance', 'custom')
+        .get('/test')
+        .reply(200);
+      
+      const response = await instance.get('http://example.com/test').exec();
+      expect(response.statusCode).to.equal(200);
+      
+      // Verify the wrapper has merged options
+      const wrapper = instance.post('http://example.com/test');
+      expect(wrapper.options.timeout).to.equal(3000);
+      expect(wrapper.options.maxRedirects).to.equal(5);
+    });
+
+    it('should handle all HTTP methods with custom instance', async () => {
+      const instance = nklient.create({
+        headers: { 'X-Instance': 'test' }
+      });
+
+      const methods = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'];
+      
+      for (const method of methods) {
+        const scope = nock('http://example.com')
+          .matchHeader('x-instance', 'test')
+          [method]('/test')
+          .reply(200);
+
+        const response = await instance[method]('http://example.com/test').exec();
+        expect(response.statusCode).to.equal(200);
+        expect(scope.isDone()).to.be.true;
+      }
+    });
+  });
+
+  describe('Advanced Streaming Features', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const zlib = require('zlib');
+
+    afterEach(() => {
+      // Clean up any test files
+      const files = ['test-download.txt', 'download.txt'];
+      files.forEach(file => {
+        const filePath = path.join(__dirname, file);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      });
+    });
+
+    it('should handle streaming with compression and pipeToFile', async () => {
+      const tmpFile = path.join(__dirname, 'test-download.txt');
+      
+      const data = 'This is compressed streaming data';
+      const compressed = zlib.gzipSync(data);
+      
+      const scope = nock('http://example.com')
+        .get('/stream-gzip')
+        .reply(200, compressed, {
+          'content-encoding': 'gzip',
+          'content-length': compressed.length
+        });
+      
+      const response = await nklient.get('http://example.com/stream-gzip')
+        .stream()
+        .exec();
+      
+      await response.body.pipeToFile(tmpFile);
+      
+      const content = fs.readFileSync(tmpFile, 'utf8');
+      expect(content).to.equal(data);
+    });
+    
+    it('should track download progress in streaming mode', async () => {
+      const progressEvents = [];
+      const data = Buffer.alloc(1024 * 10); // 10KB
+      
+      const scope = nock('http://example.com')
+        .get('/progress')
+        .reply(200, data, {
+          'content-length': data.length
+        });
+      
+      const response = await nklient.get('http://example.com/progress')
+        .stream()
+        .onDownloadProgress(progress => {
+          progressEvents.push(progress);
+        })
+        .exec();
+      
+      const chunks = [];
+      for await (const chunk of response.body) {
+        chunks.push(chunk);
+      }
+      
+      expect(progressEvents.length).to.be.greaterThan(0);
+      expect(progressEvents[progressEvents.length - 1].loaded).to.equal(data.length);
+    });
+    
+    it('should handle streaming request body with upload progress', async () => {
+      const { Readable } = require('stream');
+      const uploadProgress = [];
+      
+      const data = Buffer.alloc(1024);
+      const stream = Readable.from([data]);
+      stream.readableLength = data.length;
+      
+      const scope = nock('http://example.com')
+        .post('/upload', data)
+        .reply(200);
+      
+      const response = await nklient.post('http://example.com/upload')
+        .body(stream)
+        .onUploadProgress(progress => {
+          uploadProgress.push(progress);
+        })
+        .exec();
+      
+      expect(response.statusCode).to.equal(200);
+      expect(uploadProgress.length).to.be.greaterThan(0);
+    });
+    
+    it('should use pipe() method', async () => {
+      const { Writable } = require('stream');
+      const chunks = [];
+      const writeStream = new Writable({
+        write(chunk, encoding, callback) {
+          chunks.push(chunk);
+          callback();
+        }
+      });
+      
+      const scope = nock('http://example.com')
+        .get('/pipe')
+        .reply(200, 'piped data');
+      
+      await nklient.get('http://example.com/pipe').pipe(writeStream);
+      
+      expect(Buffer.concat(chunks).toString()).to.equal('piped data');
+    });
+    
+    it('should use downloadToFile() method', async () => {
+      const tmpFile = path.join(__dirname, 'download.txt');
+      
+      const scope = nock('http://example.com')
+        .get('/file')
+        .reply(200, 'file content');
+      
+      const result = await nklient.get('http://example.com/file')
+        .downloadToFile(tmpFile);
+      
+      expect(result.statusCode).to.equal(200);
+      expect(result.filePath).to.equal(tmpFile);
+      expect(fs.readFileSync(tmpFile, 'utf8')).to.equal('file content');
+    });
+    
+    it('should handle stream body errors', async () => {
+      const { Readable } = require('stream');
+      const errorStream = new Readable({
+        read() {
+          this.emit('error', new Error('Stream error'));
+        }
+      });
+      
+      const scope = nock('http://example.com')
+        .post('/stream-error')
+        .reply(200);
+      
+      try {
+        await nklient.post('http://example.com/stream-error')
+          .body(errorStream)
+          .exec();
+        expect.fail('Should have thrown error');
+      } catch (error) {
+        expect(error.message).to.equal('Stream error');
+      }
+    });
+
+    it('should handle deflate compression in streaming mode', async () => {
+      const data = 'deflated streaming data';
+      const compressed = zlib.deflateSync(data);
+      
+      const scope = nock('http://example.com')
+        .get('/stream-deflate')
+        .reply(200, compressed, {
+          'content-encoding': 'deflate'
+        });
+      
+      const response = await nklient.get('http://example.com/stream-deflate')
+        .stream()
+        .exec();
+      
+      const chunks = [];
+      for await (const chunk of response.body) {
+        chunks.push(chunk);
+      }
+      
+      expect(Buffer.concat(chunks).toString()).to.equal(data);
+    });
+    
+    it('should handle brotli compression in streaming mode', async () => {
+      const data = 'brotli streaming data';
+      const compressed = zlib.brotliCompressSync(data);
+      
+      const scope = nock('http://example.com')
+        .get('/stream-br')
+        .reply(200, compressed, {
+          'content-encoding': 'br'
+        });
+      
+      const response = await nklient.get('http://example.com/stream-br')
+        .stream()
+        .exec();
+      
+      const chunks = [];
+      for await (const chunk of response.body) {
+        chunks.push(chunk);
+      }
+      
+      expect(Buffer.concat(chunks).toString()).to.equal(data);
+    });
+
+    it('should handle download progress in non-streaming mode', async () => {
+      const progressEvents = [];
+      const data = Buffer.alloc(1024 * 5); // 5KB
+      
+      const scope = nock('http://example.com')
+        .get('/download-progress')
+        .reply(200, data, {
+          'content-length': data.length
+        });
+      
+      const response = await nklient.get('http://example.com/download-progress')
+        .onDownloadProgress(progress => {
+          progressEvents.push(progress);
+        })
+        .exec();
+      
+      expect(response.statusCode).to.equal(200);
+      expect(progressEvents.length).to.be.greaterThan(0);
+      expect(progressEvents[progressEvents.length - 1].loaded).to.equal(data.length);
+    });
+
+    it('should set content-length for stream with readableLength', async () => {
+      const { Readable } = require('stream');
+      const data = Buffer.alloc(1024);
+      const stream = Readable.from([data]);
+      stream.readableLength = data.length;
+      
+      const scope = nock('http://example.com')
+        .matchHeader('content-length', data.length.toString())
+        .post('/stream-length', data)
+        .reply(200);
+      
+      const response = await nklient.post('http://example.com/stream-length')
+        .body(stream)
+        .exec();
+      
+      expect(response.statusCode).to.equal(200);
+    });
+
+    it('should use chunked encoding for streams without length', async () => {
+      const { Readable } = require('stream');
+      const data = Buffer.from('streaming data');
+      const stream = Readable.from([data]);
+      
+      const scope = nock('http://example.com')
+        .matchHeader('transfer-encoding', 'chunked')
+        .post('/stream-chunked')
+        .reply(200);
+      
+      const response = await nklient.post('http://example.com/stream-chunked')
+        .body(stream)
+        .exec();
+      
+      expect(response.statusCode).to.equal(200);
     });
   });
 
