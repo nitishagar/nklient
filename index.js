@@ -223,12 +223,22 @@ const client = async params => {
           const encoding = res.headers['content-encoding'];
 
           if (requestOptions.decompress !== false && encoding) {
+            let decompressStream;
             if (encoding === 'gzip') {
-              streamBody = res.pipe(zlib.createGunzip());
+              decompressStream = zlib.createGunzip();
             } else if (encoding === 'deflate') {
-              streamBody = res.pipe(zlib.createInflate());
+              decompressStream = zlib.createInflate();
             } else if (encoding === 'br') {
-              streamBody = res.pipe(zlib.createBrotliDecompress());
+              decompressStream = zlib.createBrotliDecompress();
+            }
+            
+            if (decompressStream) {
+              streamBody = res.pipe(decompressStream);
+              // Cleanup on error
+              decompressStream.on('error', err => {
+                res.unpipe(decompressStream);
+                decompressStream.destroy();
+              });
             }
           }
 
@@ -242,25 +252,30 @@ const client = async params => {
 
           // Track download progress if handler is provided
           if (requestOptions.onDownloadProgress) {
-            const originalPipe = streamBody.pipe;
-            streamBody.pipe = function (destination, options) {
-              let totalBytes = 0;
-              const startTime = Date.now();
-              const contentLength = res.headers['content-length'] ? parseInt(res.headers['content-length']) : undefined;
-
-              this.on('data', chunk => {
-                totalBytes += chunk.length;
-                requestOptions.onDownloadProgress({
-                  loaded: totalBytes,
-                  total: contentLength,
-                  progress: contentLength ? totalBytes / contentLength : undefined,
-                  bytes: chunk.length,
-                  rate: totalBytes / ((Date.now() - startTime) / 1000)
-                });
+            let totalBytes = 0;
+            const startTime = Date.now();
+            const contentLength = res.headers['content-length'] ? parseInt(res.headers['content-length']) : undefined;
+            
+            const progressHandler = chunk => {
+              totalBytes += chunk.length;
+              requestOptions.onDownloadProgress({
+                loaded: totalBytes,
+                total: contentLength,
+                progress: contentLength ? totalBytes / contentLength : undefined,
+                bytes: chunk.length,
+                rate: totalBytes / ((Date.now() - startTime) / 1000)
               });
-
-              return originalPipe.call(this, destination, options);
             };
+            
+            streamBody.on('data', progressHandler);
+            
+            // Clean up on stream end/error
+            streamBody.on('end', () => {
+              streamBody.removeListener('data', progressHandler);
+            });
+            streamBody.on('error', () => {
+              streamBody.removeListener('data', progressHandler);
+            });
           }
 
           resolve({
@@ -281,12 +296,23 @@ const client = async params => {
         const encoding = res.headers['content-encoding'];
 
         if (requestOptions.decompress !== false && encoding) {
+          let decompressStream;
           if (encoding === 'gzip') {
-            responseStream = res.pipe(zlib.createGunzip());
+            decompressStream = zlib.createGunzip();
           } else if (encoding === 'deflate') {
-            responseStream = res.pipe(zlib.createInflate());
+            decompressStream = zlib.createInflate();
           } else if (encoding === 'br') {
-            responseStream = res.pipe(zlib.createBrotliDecompress());
+            decompressStream = zlib.createBrotliDecompress();
+          }
+          
+          if (decompressStream) {
+            responseStream = res.pipe(decompressStream);
+            // Cleanup on error
+            decompressStream.on('error', err => {
+              res.unpipe(decompressStream);
+              decompressStream.destroy();
+              reject(err);
+            });
           }
         }
 
