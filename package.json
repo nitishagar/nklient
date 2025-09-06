@@ -9,6 +9,8 @@
     "test:watch": "mocha ./tests/ --timeout 15000 --reporter spec --watch",
     "test:coverage": "nyc --reporter=html --reporter=text --reporter=lcov mocha ./tests/ --timeout 15000",
     "test:ci": "nyc --reporter=lcov mocha ./tests/ --timeout 15000 --reporter spec",
+    "test:memory": "NODE_OPTIONS=\"--expose-gc --max-old-space-size=512\" mocha ./tests/memory-leaks.test.js --timeout 60000",
+    "test:oom": "NODE_OPTIONS=\"--expose-gc --max-old-space-size=512\" npm test",
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
     "format": "prettier --write \"**/*.{js,json,md}\"",

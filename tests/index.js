@@ -13,6 +13,11 @@ describe('nklient', () => {
   afterEach(() => {
     nock.cleanAll();
     sinon.restore();
+    nklient.clearCookies();
+  });
+
+  after(() => {
+    nklient.cleanup(); // Full cleanup after all tests
   });
 
   describe('Basic HTTP Methods', () => {

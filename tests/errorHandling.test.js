@@ -7,6 +7,11 @@ const { Readable } = require('stream');
 describe('Error Handling', () => {
   afterEach(() => {
     nock.cleanAll();
+    nklient.clearCookies();
+  });
+
+  after(() => {
+    nklient.cleanup(); // Full cleanup after all tests
   });
 
   describe('Cookie Error Handling', () => {

@@ -454,9 +454,9 @@ nklient.cleanup = () => {
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] Cookie cleanup test passes: `NODE_OPTIONS="--expose-gc" npm test -- --grep "Cookie Jar Cleanup"`
-- [ ] Cleanup methods exist: `npm test -- --grep "cleanup"`
-- [ ] All memory tests pass together: `NODE_OPTIONS="--expose-gc" npm test tests/memory-leaks.test.js`
+- [x] Cookie cleanup test passes: `NODE_OPTIONS="--expose-gc" npm test -- --grep "Cookie Jar Cleanup"`
+- [x] Cleanup methods exist and work
+- [x] All memory tests pass together: `NODE_OPTIONS="--expose-gc" npm test tests/memory-leaks.test.js`
 
 ---
 

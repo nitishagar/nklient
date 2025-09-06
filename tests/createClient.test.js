@@ -8,6 +8,11 @@ const fs = require('fs');
 describe('createClient', () => {
   afterEach(() => {
     nock.cleanAll();
+    nklient.clearCookies();
+  });
+
+  after(() => {
+    nklient.cleanup(); // Full cleanup after all tests
   });
 
   describe('Configuration Loading', () => {
