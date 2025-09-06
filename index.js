@@ -53,6 +53,9 @@ const interceptors = {
   response: []
 };
 
+// Proxy agent cache
+const proxyAgents = new Map();
+
 // Main client function
 const client = async params => {
   // Ensure params has required properties
@@ -100,8 +103,12 @@ const client = async params => {
 
     // Handle proxy
     if (requestOptions.proxy) {
-      const ProxyAgent = isHttps ? HttpsProxyAgent : HttpProxyAgent;
-      settings.agent = new ProxyAgent(requestOptions.proxy);
+      const proxyKey = `${isHttps ? 'https' : 'http'}:${requestOptions.proxy}`;
+      if (!proxyAgents.has(proxyKey)) {
+        const ProxyAgent = isHttps ? HttpsProxyAgent : HttpProxyAgent;
+        proxyAgents.set(proxyKey, new ProxyAgent(requestOptions.proxy));
+      }
+      settings.agent = proxyAgents.get(proxyKey);
     } else {
       settings.agent = requestOptions.agent || agents[isHttps ? 'https' : 'http'];
     }
@@ -288,10 +295,21 @@ const client = async params => {
         let totalBytes = 0;
         const startTime = Date.now();
         const contentLength = res.headers['content-length'] ? parseInt(res.headers['content-length']) : undefined;
+        const maxSize = requestOptions.maxResponseSize || Infinity;
 
         responseStream.on('data', chunk => {
-          chunks.push(chunk);
           totalBytes += chunk.length;
+          
+          // Check response size limit
+          if (totalBytes > maxSize) {
+            responseStream.destroy();
+            const err = new Error(`Response size limit exceeded: ${totalBytes} > ${maxSize}`);
+            err.code = 'ERESPONSETOOLARGE';
+            reject(err);
+            return;
+          }
+          
+          chunks.push(chunk);
 
           // Emit download progress if handler is provided
           if (requestOptions.onDownloadProgress) {
@@ -723,6 +741,18 @@ class RequestWrapper {
   }
 
   /**
+   * Sets the maximum response size in bytes
+   * @param {number} bytes - Maximum response size
+   * @returns {RequestWrapper} This request wrapper for chaining
+   * @example
+   * request.maxResponseSize(1024 * 1024) // 1MB limit
+   */
+  maxResponseSize(bytes) {
+    this.options.maxResponseSize = bytes;
+    return this;
+  }
+
+  /**
    * Executes the HTTP request
    * @returns {Promise<Object>} Response object with statusCode, headers, and body
    * @example
@@ -792,6 +822,11 @@ nklient.interceptors = {
     },
     eject: id => {
       interceptors.request[id] = null;
+      // Compact array if too many null entries
+      const nullCount = interceptors.request.filter(i => i === null).length;
+      if (nullCount > 10) {
+        interceptors.request = interceptors.request.filter(i => i !== null);
+      }
     }
   },
   response: {
@@ -801,6 +836,11 @@ nklient.interceptors = {
     },
     eject: id => {
       interceptors.response[id] = null;
+      // Compact array if too many null entries
+      const nullCount = interceptors.response.filter(i => i === null).length;
+      if (nullCount > 10) {
+        interceptors.response = interceptors.response.filter(i => i !== null);
+      }
     }
   }
 };
