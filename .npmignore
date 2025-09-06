@@ -1,0 +1,29 @@
+# Development files
+.github/
+tests/
+examples/
+thoughts/
+.eslintrc.js
+.prettierrc.json
+.nycrc.json
+*.test.js
+coverage/
+.nyc_output/
+
+# CI files
+.travis.yml
+.gitlab-ci.yml
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

@@ -6,17 +6,12 @@ This file provides guidance to Claude when working with code in this repository.
 
 ### Development
 - **Install dependencies:** `npm install`
-- **Run in watch mode:** `npm run dev` (rebuilds on file changes in `src/`)
-
-### Building
-- **Build for production:** `npm run build`
-- This command transpiles TypeScript from `src/` to JavaScript in `dist/` and generates type definitions.
 
 ### Testing
 - **Run all tests:** `npm test`
 - **Run tests in watch mode:** `npm run test:watch`
-- **Generate test coverage report:** `npm run coverage`
-- Tests use **Jest** and are located in the `tests/` directory.
+- **Generate test coverage report:** `npm run test:coverage`
+- Tests use **Mocha** and are located in the `tests/` directory.
 - **IMPORTANT:** Ensure test coverage remains at 85% or higher.
 
 ### Linting & Formatting
@@ -26,43 +21,44 @@ This file provides guidance to Claude when working with code in this repository.
 
 ## Code Style & Conventions
 
-- **Language:** This project uses **TypeScript**. Please add types for all new code.
-- **Modules:** Use ES Modules (`import`/`export`) syntax.
+- **Language:** This project uses **JavaScript** with comprehensive JSDoc comments.
+- **Modules:** Use CommonJS (`require`/`module.exports`) syntax.
 - **Asynchronous Code:** Use `async/await` for all Promise-based operations.
 - **Formatting:** Adhere to the `.prettierrc` configuration. Run `npm run format` before committing.
-- **Documentation:** Add TSDoc comments to all exported functions, classes, and methods.
+- **Documentation:** Add JSDoc comments to all exported functions, classes, and methods.
 
 ## Architecture Overview
 
-**nklient** is a comprehensive, modern, and lightweight HTTP/S client for Node.js, built with TypeScript and a fluent API design.
+**nklient** is a comprehensive, modern, and lightweight HTTP/S client for Node.js, built with JavaScript and a fluent API design.
 
 ### Directory Structure
-- `src/`: All TypeScript source code.
-- `dist/`: Compiled JavaScript output (do not edit directly).
-- `tests/`: Jest test files.
-- `examples/`: Usage examples.
+- `index.js`: Main implementation file
+- `index.d.ts`: TypeScript type definitions
+- `util/`: Utility functions
+- `tests/`: Mocha test files
+- `examples/`: Usage examples
+- `config/`: Configuration schemas and loaders
 
 ### Core Components
 
-1.  **`src/index.ts`**: The main entry point.
-    - Exports factory functions for HTTP verbs: `get()`, `post()`, `put()`, `patch()`, `delete()`, `head()`.
+1.  **`index.js`**: The main entry point.
+    - Exports factory functions for HTTP verbs: `get()`, `post()`, `put()`, `patch()`, `delete()`, `head()`, `options()`.
     - Manages keep-alive agents for both `http` and `https` to optimize connection reuse.
+    - Contains the `RequestWrapper` class that implements the fluent API.
+    - Handles all HTTP request logic, streaming, cookies, and response processing.
 
-2.  **`src/request.ts`**: Implements the `NklientRequest` class.
-    - This is the core of the fluent API, returned by the verb methods (`get`, `post`, etc.).
-    - Chainable methods: `headers()`, `body()`, `query()`, `timeout()`, `auth()`.
-    - Terminal method: `exec()` returns a `Promise<NklientResponse>`.
+2.  **`util/index.js`**: Utility functions.
+    - `isJSON()`: Checks if content is JSON.
+    - `extend()`: Deep object merging.
+    - Cookie-related utilities.
 
-3.  **`src/response.ts`**: Implements the `NklientResponse` class.
-    - A standardized wrapper around the incoming HTTP response.
-    - Provides easy access to `statusCode`, `headers`, `body`, and the raw response object.
+3.  **`config/ConfigLoader.js`**: Configuration management.
+    - Schema-based validation with AJV.
+    - Loads and validates client configurations.
 
-4.  **`src/errors.ts`**: Defines custom error classes.
-    - `NklientRequestError`: For network issues or non-2xx responses.
-    - `NklientTimeoutError`: For requests that exceed their configured timeout.
-    - **IMPORTANT:** When throwing errors, use these custom classes.
-
-5.  **`src/utils.ts`**: Utility functions for internal use.
+4.  **`index.d.ts`**: TypeScript type definitions.
+    - Provides full type support for TypeScript users.
+    - Defines interfaces for requests, responses, and options.
 
 ### Key Features & Processing Flow
 
@@ -76,11 +72,12 @@ This file provides guidance to Claude when working with code in this repository.
 ## Testing Approach
 
 - Tests make actual HTTP requests to `https://httpbingo.org/`, which is a robust service for testing HTTP clients.
+- Tests use Nock for mocking HTTP requests to ensure consistent and fast test execution.
 - When adding a new feature (e.g., adding proxy support):
-    1.  Create a new test file `tests/proxy.test.ts` or add to an existing relevant file.
+    1.  Create a new test file `tests/proxy.test.js` or add to an existing relevant file.
     2.  Write tests that cover the success case, failure cases, and edge cases.
     3.  Follow the existing `describe()` and `it()` structure.
-    4.  Use Jest's `expect()` for assertions.
+    4.  Use Chai's `expect()` for assertions.
 
 ## Contribution Workflow
 
@@ -99,10 +96,10 @@ This file provides guidance to Claude when working with code in this repository.
 
 This is a list of features we want to add. Feel free to pick one up!
 
-- [ ] **Retry Logic:** Add a `retry(count, delay)` method to handle transient failures.
-- [ ] **Cookie Handling:** Automatically manage and send cookies.
+- [x] **Retry Logic:** ~~Add a `retry(count, delay)` method to handle transient failures.~~ ✅ Implemented
+- [x] **Cookie Handling:** ~~Automatically manage and send cookies.~~ ✅ Implemented
 - [ ] **Request Cancellation:** Implement cancellation using `AbortController`.
-- [ ] **Streaming:** Support for streaming request and response bodies.
+- [x] **Streaming:** ~~Support for streaming request and response bodies.~~ ✅ Implemented
 - [ ] **Plugin System:** Allow users to extend functionality with plugins.
-- [ ] **Proxy Support:** Add a `proxy()` method to route requests through an HTTP/S proxy.
+- [x] **Proxy Support:** ~~Add a `proxy()` method to route requests through an HTTP/S proxy.~~ ✅ Implemented
 - [ ] **Browser Support:** Create a build that uses `fetch` for use in web browsers.

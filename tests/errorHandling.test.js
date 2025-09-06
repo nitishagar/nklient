@@ -2,7 +2,6 @@
 const { expect } = require('chai');
 const nock = require('nock');
 const nklient = require('../index');
-const { CookieJar } = require('tough-cookie');
 const { Readable } = require('stream');
 
 describe('Error Handling', () => {
@@ -13,13 +12,13 @@ describe('Error Handling', () => {
   describe('Cookie Error Handling', () => {
     it('should throw error when adding cookies without URI', () => {
       const request = nklient.get();
-      
+
       expect(() => request.cookies('test=value')).to.throw('URI must be set before adding cookies');
     });
 
     it('should throw error when cookie setting fails', () => {
       const request = nklient.get('http://example.com/test');
-      
+
       // Pass an invalid cookie format that will cause an error
       expect(() => request.cookies({ '\n': 'invalid' })).to.throw('Failed to set cookies');
     });
@@ -75,9 +74,9 @@ describe('Error Handling', () => {
 
   describe('Response Stream Error Handling', () => {
     it('should handle response stream errors gracefully', async () => {
-      const scope = nock('http://example.com')
+      nock('http://example.com')
         .get('/stream-error')
-        .reply(200, function() {
+        .reply(200, function () {
           const stream = new Readable({
             read() {
               this.push('some data');
@@ -97,7 +96,7 @@ describe('Error Handling', () => {
     });
 
     it('should handle gzip decompression errors', async () => {
-      const scope = nock('http://example.com')
+      nock('http://example.com')
         .get('/bad-gzip')
         .reply(200, Buffer.from('not gzip data'), {
           'content-encoding': 'gzip'
@@ -115,7 +114,7 @@ describe('Error Handling', () => {
   describe('Response Body Handling', () => {
     it('should handle null encoding by returning buffer', async () => {
       const binaryData = Buffer.from([0x00, 0x01, 0x02, 0x03]);
-      const scope = nock('http://example.com')
+      nock('http://example.com')
         .get('/binary')
         .reply(200, binaryData);
 
@@ -129,7 +128,7 @@ describe('Error Handling', () => {
     });
 
     it('should handle JSON parse errors and return as string', async () => {
-      const scope = nock('http://example.com')
+      nock('http://example.com')
         .get('/invalid-json')
         .reply(200, 'this is not valid json', {
           'content-type': 'application/json'
@@ -144,15 +143,7 @@ describe('Error Handling', () => {
 
   describe('Request with Pre-built Options', () => {
     it('should handle RequestWrapper with pre-built options', async () => {
-      const preBuiltOptions = {
-        method: 'GET',
-        uri: 'http://example.com/test',
-        headers: { 'X-Custom': 'value' },
-        jar: new CookieJar(),
-        timeout: 5000
-      };
-
-      const scope = nock('http://example.com')
+      nock('http://example.com')
         .matchHeader('x-custom', 'value')
         .get('/test')
         .reply(200, { success: true });
@@ -163,7 +154,7 @@ describe('Error Handling', () => {
         timeout: 5000,
         cookies: true
       });
-      
+
       const response = await client.get('http://example.com/test').exec();
 
       expect(response.statusCode).to.equal(200);
@@ -175,7 +166,7 @@ describe('Error Handling', () => {
     it('should properly handle timeout errors', async () => {
       // Use a real timeout scenario without nock
       const originalClient = require('../index');
-      
+
       // Create a custom instance that will timeout
       const timeoutClient = originalClient.create({ timeout: 1 });
 
@@ -193,12 +184,12 @@ describe('Error Handling', () => {
   describe('Redirect Error Handling', () => {
     it('should handle maximum redirects exceeded', async () => {
       // Create a redirect loop
-      const scope1 = nock('http://example.com')
+      nock('http://example.com')
         .persist()
         .get('/redirect1')
         .reply(302, undefined, { Location: 'http://example.com/redirect2' });
 
-      const scope2 = nock('http://example.com')
+      nock('http://example.com')
         .persist()
         .get('/redirect2')
         .reply(302, undefined, { Location: 'http://example.com/redirect1' });

@@ -18,7 +18,7 @@ const pipelineAsync = promisify(pipeline);
     // Handle post data
     if (requestOptions.body) {
       const contentType = settings.headers['Content-Type'] || settings.headers['content-type'];
-      
+
       // Check if body is a stream
       if (requestOptions.body && typeof requestOptions.body.pipe === 'function') {
         // For streams, we might not know the content length
@@ -51,7 +51,7 @@ const pipelineAsync = promisify(pipeline);
           // Apply decompression to the stream if needed
           let streamBody = res;
           const encoding = res.headers['content-encoding'];
-          
+
           if (requestOptions.decompress !== false && encoding) {
             if (encoding === 'gzip') {
               streamBody = res.pipe(zlib.createGunzip());
@@ -61,7 +61,7 @@ const pipelineAsync = promisify(pipeline);
               streamBody = res.pipe(zlib.createBrotliDecompress());
             }
           }
-          
+
           // Add helper methods to the stream
           streamBody.pipeToFile = async (filePath, options = {}) => {
             const fs = require('fs');
@@ -69,7 +69,7 @@ const pipelineAsync = promisify(pipeline);
             await pipelineAsync(streamBody, writeStream);
             return filePath;
           };
-          
+
           // Track download progress if handler is provided
           if (requestOptions.onDownloadProgress) {
             const originalPipe = streamBody.pipe;
@@ -77,7 +77,7 @@ const pipelineAsync = promisify(pipeline);
               let totalBytes = 0;
               const startTime = Date.now();
               const contentLength = res.headers['content-length'] ? parseInt(res.headers['content-length']) : undefined;
-              
+
               this.on('data', chunk => {
                 totalBytes += chunk.length;
                 requestOptions.onDownloadProgress({
@@ -88,11 +88,11 @@ const pipelineAsync = promisify(pipeline);
                   rate: totalBytes / ((Date.now() - startTime) / 1000)
                 });
               });
-              
+
               return originalPipe.call(this, destination, options);
             };
           }
-          
+
           resolve({
             statusCode: res.statusCode,
             headers: res.headers,
@@ -114,11 +114,11 @@ const pipelineAsync = promisify(pipeline);
         let totalBytes = 0;
         const startTime = Date.now();
         const contentLength = res.headers['content-length'] ? parseInt(res.headers['content-length']) : undefined;
-        
+
         responseStream.on('data', chunk => {
           chunks.push(chunk);
           totalBytes += chunk.length;
-          
+
           // Emit download progress if handler is provided
           if (requestOptions.onDownloadProgress) {
             requestOptions.onDownloadProgress({
@@ -141,7 +141,7 @@ const pipelineAsync = promisify(pipeline);
           // It's a stream
           let totalBytes = 0;
           const startTime = Date.now();
-          
+
           // Track upload progress if handler is provided
           if (requestOptions.onUploadProgress) {
             requestOptions.body.on('data', chunk => {
@@ -155,7 +155,7 @@ const pipelineAsync = promisify(pipeline);
               });
             });
           }
-          
+
           // Pipe the stream to the request
           requestOptions.body.pipe(req);
           requestOptions.body.on('error', err => {
@@ -186,13 +186,13 @@ const pipelineAsync = promisify(pipeline);
   // Set request body (supports streams)
   body(data) {
     this.options.body = data;
-    
+
     // If it's a stream and has readableLength, set content-length
     if (data && typeof data.pipe === 'function' && data.readableLength) {
       this.options.headers = this.options.headers || {};
       this.options.headers['content-length'] = data.readableLength;
     }
-    
+
     return this;
   }
 */

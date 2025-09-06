@@ -432,7 +432,7 @@ describe('nklient', () => {
 
     it('should set cookies via cookies() method with string format', async () => {
       const scope = nock('http://example.com')
-        .matchHeader('cookie', (cookieHeader) => {
+        .matchHeader('cookie', cookieHeader => {
           // Check that both cookies are present in the header
           return cookieHeader.includes('session=abc123') && cookieHeader.includes('user=john');
         })
@@ -1051,7 +1051,7 @@ describe('nklient', () => {
   describe('createClient Configuration', () => {
     it('should create client with default configuration', async () => {
       const client = nklient.createClient();
-      
+
       expect(client.config).to.exist;
       expect(client.config.timeout).to.equal(30000);
       expect(client.config.maxRedirects).to.equal(5);
@@ -1067,7 +1067,7 @@ describe('nklient', () => {
       };
 
       const client = nklient.createClient(customConfig);
-      
+
       expect(client.config.baseUrl).to.equal('http://api.example.com');
       expect(client.config.timeout).to.equal(5000);
       expect(client.config.defaultHeaders).to.deep.equal({ 'X-API-Key': 'test123' });
@@ -1175,7 +1175,7 @@ describe('nklient', () => {
 
       // Test each HTTP method
       const methods = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'];
-      
+
       for (const method of methods) {
         const scope = nock('http://example.com')[method]('/test')
           .reply(200);
@@ -1232,7 +1232,7 @@ describe('nklient', () => {
         .reply(302, undefined, { Location: 'http://example.com/final' });
 
       const response = await client.get('http://example.com/redirect').exec();
-      
+
       expect(response.statusCode).to.equal(302);
       expect(response.headers.location).to.equal('http://example.com/final');
       expect(scope.isDone()).to.be.true;
@@ -1255,7 +1255,7 @@ describe('nklient', () => {
         });
 
       const response = await client.get('http://example.com/compressed').exec();
-      
+
       expect(response.statusCode).to.equal(200);
       expect(Buffer.isBuffer(response.body)).to.be.true;
       expect(response.body).to.deep.equal(compressed);
@@ -1390,17 +1390,17 @@ describe('nklient', () => {
   describe('Global Cookie Jar Functions', () => {
     it('should use global cookie jar methods with jar parameter', async () => {
       const jar = nklient.jar();
-      
+
       // Test getCookies with jar returning cookies
       await jar.setCookie('test=value', 'http://example.com');
       const cookies = await nklient.getCookies('http://example.com', jar);
       expect(cookies.length).to.be.greaterThan(0);
-      
+
       // Test setCookie with jar
       await nklient.setCookie('another=cookie', 'http://example.com', jar);
       const updatedCookies = await nklient.getCookies('http://example.com', jar);
       expect(updatedCookies.length).to.equal(2);
-      
+
       // Test clearCookies with jar
       nklient.clearCookies(jar);
       const clearedCookies = await nklient.getCookies('http://example.com', jar);
@@ -1412,21 +1412,21 @@ describe('nklient', () => {
     it('should merge custom defaults with extend', async () => {
       // Store original defaults
       const originalTimeout = 30000;
-      
+
       nklient.defaults({
         headers: { 'X-Custom': 'value' },
         timeout: 5000
       });
-      
+
       // Test that defaults were merged
       const scope = nock('http://example.com')
         .matchHeader('x-custom', 'value')
         .get('/test')
         .reply(200);
-      
+
       const response = await nklient.get('http://example.com/test').exec();
       expect(response.statusCode).to.equal(200);
-      
+
       // Restore defaults
       nklient.defaults({ timeout: originalTimeout });
     });
@@ -1439,15 +1439,15 @@ describe('nklient', () => {
         timeout: 3000,
         maxRedirects: 5
       });
-      
+
       const scope = nock('http://example.com')
         .matchHeader('x-instance', 'custom')
         .get('/test')
         .reply(200);
-      
+
       const response = await instance.get('http://example.com/test').exec();
       expect(response.statusCode).to.equal(200);
-      
+
       // Verify the wrapper has merged options
       const wrapper = instance.post('http://example.com/test');
       expect(wrapper.options.timeout).to.equal(3000);
@@ -1460,11 +1460,10 @@ describe('nklient', () => {
       });
 
       const methods = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'];
-      
+
       for (const method of methods) {
         const scope = nock('http://example.com')
-          .matchHeader('x-instance', 'test')
-          [method]('/test')
+          .matchHeader('x-instance', 'test')[method]('/test')
           .reply(200);
 
         const response = await instance[method]('http://example.com/test').exec();
@@ -1492,76 +1491,76 @@ describe('nklient', () => {
 
     it('should handle streaming with compression and pipeToFile', async () => {
       const tmpFile = path.join(__dirname, 'test-download.txt');
-      
+
       const data = 'This is compressed streaming data';
       const compressed = zlib.gzipSync(data);
-      
+
       const scope = nock('http://example.com')
         .get('/stream-gzip')
         .reply(200, compressed, {
           'content-encoding': 'gzip',
           'content-length': compressed.length
         });
-      
+
       const response = await nklient.get('http://example.com/stream-gzip')
         .stream()
         .exec();
-      
+
       await response.body.pipeToFile(tmpFile);
-      
+
       const content = fs.readFileSync(tmpFile, 'utf8');
       expect(content).to.equal(data);
     });
-    
+
     it('should track download progress in streaming mode', async () => {
       const progressEvents = [];
       const data = Buffer.alloc(1024 * 10); // 10KB
-      
+
       const scope = nock('http://example.com')
         .get('/progress')
         .reply(200, data, {
           'content-length': data.length
         });
-      
+
       const response = await nklient.get('http://example.com/progress')
         .stream()
         .onDownloadProgress(progress => {
           progressEvents.push(progress);
         })
         .exec();
-      
+
       const chunks = [];
       for await (const chunk of response.body) {
         chunks.push(chunk);
       }
-      
+
       expect(progressEvents.length).to.be.greaterThan(0);
       expect(progressEvents[progressEvents.length - 1].loaded).to.equal(data.length);
     });
-    
+
     it('should handle streaming request body with upload progress', async () => {
       const { Readable } = require('stream');
       const uploadProgress = [];
-      
+
       const data = Buffer.alloc(1024);
       const stream = Readable.from([data]);
       stream.readableLength = data.length;
-      
+
       const scope = nock('http://example.com')
         .post('/upload', data)
         .reply(200);
-      
+
       const response = await nklient.post('http://example.com/upload')
         .body(stream)
         .onUploadProgress(progress => {
           uploadProgress.push(progress);
         })
         .exec();
-      
+
       expect(response.statusCode).to.equal(200);
       expect(uploadProgress.length).to.be.greaterThan(0);
     });
-    
+
     it('should use pipe() method', async () => {
       const { Writable } = require('stream');
       const chunks = [];
@@ -1571,31 +1570,31 @@ describe('nklient', () => {
           callback();
         }
       });
-      
+
       const scope = nock('http://example.com')
         .get('/pipe')
         .reply(200, 'piped data');
-      
+
       await nklient.get('http://example.com/pipe').pipe(writeStream);
-      
+
       expect(Buffer.concat(chunks).toString()).to.equal('piped data');
     });
-    
+
     it('should use downloadToFile() method', async () => {
       const tmpFile = path.join(__dirname, 'download.txt');
-      
+
       const scope = nock('http://example.com')
         .get('/file')
         .reply(200, 'file content');
-      
+
       const result = await nklient.get('http://example.com/file')
         .downloadToFile(tmpFile);
-      
+
       expect(result.statusCode).to.equal(200);
       expect(result.filePath).to.equal(tmpFile);
       expect(fs.readFileSync(tmpFile, 'utf8')).to.equal('file content');
     });
-    
+
     it('should handle stream body errors', async () => {
       const { Readable } = require('stream');
       const errorStream = new Readable({
@@ -1603,11 +1602,11 @@ describe('nklient', () => {
           this.emit('error', new Error('Stream error'));
         }
       });
-      
+
       const scope = nock('http://example.com')
         .post('/stream-error')
         .reply(200);
-      
+
       try {
         await nklient.post('http://example.com/stream-error')
           .body(errorStream)
@@ -1621,63 +1620,63 @@ describe('nklient', () => {
     it('should handle deflate compression in streaming mode', async () => {
       const data = 'deflated streaming data';
       const compressed = zlib.deflateSync(data);
-      
+
       const scope = nock('http://example.com')
         .get('/stream-deflate')
         .reply(200, compressed, {
           'content-encoding': 'deflate'
         });
-      
+
       const response = await nklient.get('http://example.com/stream-deflate')
         .stream()
         .exec();
-      
+
       const chunks = [];
       for await (const chunk of response.body) {
         chunks.push(chunk);
       }
-      
+
       expect(Buffer.concat(chunks).toString()).to.equal(data);
     });
-    
+
     it('should handle brotli compression in streaming mode', async () => {
       const data = 'brotli streaming data';
       const compressed = zlib.brotliCompressSync(data);
-      
+
       const scope = nock('http://example.com')
         .get('/stream-br')
         .reply(200, compressed, {
           'content-encoding': 'br'
         });
-      
+
       const response = await nklient.get('http://example.com/stream-br')
         .stream()
         .exec();
-      
+
       const chunks = [];
       for await (const chunk of response.body) {
         chunks.push(chunk);
       }
-      
+
       expect(Buffer.concat(chunks).toString()).to.equal(data);
     });
 
     it('should handle download progress in non-streaming mode', async () => {
       const progressEvents = [];
       const data = Buffer.alloc(1024 * 5); // 5KB
-      
+
       const scope = nock('http://example.com')
         .get('/download-progress')
         .reply(200, data, {
           'content-length': data.length
         });
-      
+
       const response = await nklient.get('http://example.com/download-progress')
         .onDownloadProgress(progress => {
           progressEvents.push(progress);
         })
         .exec();
-      
+
       expect(response.statusCode).to.equal(200);
       expect(progressEvents.length).to.be.greaterThan(0);
       expect(progressEvents[progressEvents.length - 1].loaded).to.equal(data.length);
@@ -1688,16 +1687,16 @@ describe('nklient', () => {
       const data = Buffer.alloc(1024);
       const stream = Readable.from([data]);
       stream.readableLength = data.length;
-      
+
       const scope = nock('http://example.com')
         .matchHeader('content-length', data.length.toString())
         .post('/stream-length', data)
         .reply(200);
-      
+
       const response = await nklient.post('http://example.com/stream-length')
         .body(stream)
         .exec();
-      
+
       expect(response.statusCode).to.equal(200);
     });
 
@@ -1705,16 +1704,16 @@ describe('nklient', () => {
       const { Readable } = require('stream');
       const data = Buffer.from('streaming data');
       const stream = Readable.from([data]);
-      
+
       const scope = nock('http://example.com')
         .matchHeader('transfer-encoding', 'chunked')
         .post('/stream-chunked')
         .reply(200);
-      
+
       const response = await nklient.post('http://example.com/stream-chunked')
         .body(stream)
         .exec();
-      
+
       expect(response.statusCode).to.equal(200);
     });
   });
@@ -1737,7 +1736,7 @@ describe('nklient', () => {
         });
 
       const response = await nklient.get('http://example.com/invalid-json').exec();
-      
+
       expect(response.statusCode).to.equal(200);
       expect(Buffer.isBuffer(response.body)).to.be.true;
       expect(response.body.toString()).to.equal('not json');

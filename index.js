@@ -9,6 +9,7 @@ const { HttpProxyAgent } = require('http-proxy-agent');
 const { pipeline } = require('stream');
 const { promisify } = require('util');
 const pipelineAsync = promisify(pipeline);
+const packageJson = require('./package.json');
 
 // utils
 const isJSON = require('./util').isJSON;
@@ -29,7 +30,7 @@ const defaults = {
     retryOnStatusCodes: [408, 429, 500, 502, 503, 504]
   },
   headers: {
-    'User-Agent': 'nklient/1.0.0',
+    'User-Agent': `nklient/${packageJson.version}`,
     'Accept-Encoding': 'gzip, deflate, br'
   },
   http2: false,
@@ -58,7 +59,7 @@ const client = async params => {
   if (!params || !params.uri) {
     throw new Error('URI is required');
   }
-  
+
   const options = extend({}, defaults, params);
   let redirectCount = 0;
 
@@ -108,7 +109,7 @@ const client = async params => {
     // Handle post data
     if (requestOptions.body) {
       const contentType = settings.headers['Content-Type'] || settings.headers['content-type'];
-      
+
       // Check if body is a stream
       if (requestOptions.body && typeof requestOptions.body.pipe === 'function') {
         // For streams, we might not know the content length
@@ -178,7 +179,7 @@ const client = async params => {
             resolve(response);
             return;
           }
-          
+
           if (redirectCount >= requestOptions.maxRedirects) {
             reject(new Error('Maximum redirects exceeded'));
             return;
@@ -213,7 +214,7 @@ const client = async params => {
           // Apply decompression to the stream if needed
           let streamBody = res;
           const encoding = res.headers['content-encoding'];
-          
+
           if (requestOptions.decompress !== false && encoding) {
             if (encoding === 'gzip') {
               streamBody = res.pipe(zlib.createGunzip());
@@ -223,7 +224,7 @@ const client = async params => {
               streamBody = res.pipe(zlib.createBrotliDecompress());
             }
           }
-          
+
           // Add helper methods to the stream
           streamBody.pipeToFile = async (filePath, options = {}) => {
             const fs = require('fs');
@@ -231,15 +232,15 @@ const client = async params => {
             await pipelineAsync(streamBody, writeStream);
             return filePath;
           };
-          
+
           // Track download progress if handler is provided
           if (requestOptions.onDownloadProgress) {
             const originalPipe = streamBody.pipe;
-            streamBody.pipe = function(destination, options) {
+            streamBody.pipe = function (destination, options) {
               let totalBytes = 0;
               const startTime = Date.now();
               const contentLength = res.headers['content-length'] ? parseInt(res.headers['content-length']) : undefined;
-              
+
               this.on('data', chunk => {
                 totalBytes += chunk.length;
                 requestOptions.onDownloadProgress({
@@ -250,11 +251,11 @@ const client = async params => {
                   rate: totalBytes / ((Date.now() - startTime) / 1000)
                 });
               });
-              
+
               return originalPipe.call(this, destination, options);
             };
           }
-          
+
           resolve({
             statusCode: res.statusCode,
             headers: res.headers,
@@ -287,11 +288,11 @@ const client = async params => {
         let totalBytes = 0;
         const startTime = Date.now();
         const contentLength = res.headers['content-length'] ? parseInt(res.headers['content-length']) : undefined;
-        
+
         responseStream.on('data', chunk => {
           chunks.push(chunk);
           totalBytes += chunk.length;
-          
+
           // Emit download progress if handler is provided
           if (requestOptions.onDownloadProgress) {
             requestOptions.onDownloadProgress({
@@ -342,7 +343,7 @@ const client = async params => {
           // It's a stream
           let totalBytes = 0;
           const startTime = Date.now();
-          
+
           // Track upload progress if handler is provided
           if (requestOptions.onUploadProgress) {
             requestOptions.body.on('data', chunk => {
@@ -356,7 +357,7 @@ const client = async params => {
               });
             });
           }
-          
+
           // Pipe the stream to the request
           requestOptions.body.pipe(req);
           requestOptions.body.on('error', err => {
@@ -393,7 +394,8 @@ const client = async params => {
         const response = await makeRequest(requestOptions);
 
         // Check if we should retry based on status code
-        if (attempt < retry.attempts && retry.retryOnStatusCodes && retry.retryOnStatusCodes.includes(response.statusCode)) {
+        if (attempt < retry.attempts && retry.retryOnStatusCodes &&
+            retry.retryOnStatusCodes.includes(response.statusCode)) {
           throw new Error(`Status code ${response.statusCode} is retryable`);
         }
 
@@ -427,8 +429,17 @@ const client = async params => {
   return executeWithRetry(processedOptions);
 };
 
-// Request wrapper class
+/**
+ * Request wrapper class that provides a fluent API for building HTTP requests
+ * @class RequestWrapper
+ */
 class RequestWrapper {
+  /**
+   * Creates a new RequestWrapper instance
+   * @param {string} method - HTTP method (GET, POST, etc.)
+   * @param {string} uri - Request URI
+   * @param {Object} [preBuiltOptions=null] - Pre-built options from createClient
+   */
   constructor(method, uri, preBuiltOptions = null) {
     if (preBuiltOptions) {
       // Use pre-built options from createClient
@@ -447,7 +458,17 @@ class RequestWrapper {
     }
   }
 
-  // Set headers
+  /**
+   * Sets request headers
+   * @param {string|Object} nameOrObject - Header name or object with multiple headers
+   * @param {string} [value] - Header value (when first param is string)
+   * @returns {RequestWrapper} This instance for chaining
+   * @example
+   * // Set single header
+   * request.headers('Authorization', 'Bearer token')
+   * // Set multiple headers
+   * request.headers({ 'Authorization': 'Bearer token', 'Content-Type': 'application/json' })
+   */
   headers(nameOrObject, value) {
     if (typeof nameOrObject === 'object') {
       extend(this.options.headers, nameOrObject);
@@ -457,16 +478,24 @@ class RequestWrapper {
     return this;
   }
 
-  // Set request body (supports streams)
+  /**
+   * Sets the request body (supports strings, objects, buffers, and streams)
+   * @param {string|Object|Buffer|Stream} data - Request body data
+   * @returns {RequestWrapper} This instance for chaining
+   * @example
+   * request.body('raw text')
+   * request.body({ key: 'value' })
+   * request.body(fs.createReadStream('file.txt'))
+   */
   body(data) {
     this.options.body = data;
-    
+
     // If it's a stream and has readableLength, set content-length
     if (data && typeof data.pipe === 'function' && data.readableLength) {
       this.options.headers = this.options.headers || {};
       this.options.headers['content-length'] = data.readableLength;
     }
-    
+
     return this;
   }
 
@@ -475,13 +504,26 @@ class RequestWrapper {
     return this.body(data);
   }
 
-  // Set timeout
+  /**
+   * Sets the request timeout
+   * @param {number} ms - Timeout in milliseconds
+   * @returns {RequestWrapper} This instance for chaining
+   * @example
+   * request.timeout(5000) // 5 second timeout
+   */
   timeout(ms) {
     this.options.timeout = ms;
     return this;
   }
 
-  // Set query parameters
+  /**
+   * Sets query parameters
+   * @param {Object} params - Query parameters as key-value pairs
+   * @returns {RequestWrapper} This instance for chaining
+   * @example
+   * request.query({ page: 1, limit: 10 })
+   * // Results in: ?page=1&limit=10
+   */
   query(params) {
     const parsed = new URL(this.options.uri);
     Object.entries(params).forEach(([key, value]) => {
@@ -491,21 +533,39 @@ class RequestWrapper {
     return this;
   }
 
-  // Set form data
+  /**
+   * Sets form-encoded body data
+   * @param {Object} data - Form data as key-value pairs
+   * @returns {RequestWrapper} This instance for chaining
+   * @example
+   * request.form({ username: 'john', password: 'secret' })
+   */
   form(data) {
     this.options.headers['Content-Type'] = 'application/x-www-form-urlencoded';
     this.options.body = new URLSearchParams(data).toString();
     return this;
   }
 
-  // Set JSON body
+  /**
+   * Sets JSON body data (automatically sets Content-Type header)
+   * @param {Object|Array} data - Data to be JSON stringified
+   * @returns {RequestWrapper} This instance for chaining
+   * @example
+   * request.json({ name: 'John', age: 30 })
+   */
   json(data) {
     this.options.headers['Content-Type'] = 'application/json';
     this.options.body = data;
     return this;
   }
 
-  // Set proxy
+  /**
+   * Sets a proxy URL for the request
+   * @param {string} proxyUrl - Proxy URL (e.g., 'http://proxy.example.com:8080')
+   * @returns {RequestWrapper} This instance for chaining
+   * @example
+   * request.proxy('http://proxy.example.com:8080')
+   */
   proxy(proxyUrl) {
     this.options.proxy = proxyUrl;
     return this;
@@ -517,7 +577,14 @@ class RequestWrapper {
     return this;
   }
 
-  // Set cookie jar
+  /**
+   * Sets a cookie jar for the request
+   * @param {CookieJar} [jar] - Cookie jar instance (creates new if not provided)
+   * @returns {RequestWrapper} This instance for chaining
+   * @example
+   * const jar = nklient.jar();
+   * request.jar(jar)
+   */
   jar(jar) {
     this.options.jar = jar || new CookieJar();
     return this;
@@ -529,7 +596,17 @@ class RequestWrapper {
     return this;
   }
 
-  // Set cookies for the request
+  /**
+   * Sets cookies for the request
+   * @param {string|Object} cookiesInput - Cookies as string or object
+   * @returns {RequestWrapper} This instance for chaining
+   * @throws {Error} If URI is not set or cookie setting fails
+   * @example
+   * // String format
+   * request.cookies('sessionId=abc123; userId=456')
+   * // Object format
+   * request.cookies({ sessionId: 'abc123', userId: '456' })
+   */
   cookies(cookiesInput) {
     if (!this.options.jar) {
       this.options.jar = new CookieJar();
@@ -564,7 +641,16 @@ class RequestWrapper {
     return this;
   }
 
-  // Set retry options
+  /**
+   * Sets retry options for the request
+   * @param {Object} options - Retry configuration
+   * @param {number} [options.attempts] - Number of retry attempts
+   * @param {number} [options.delay] - Delay between retries in ms
+   * @param {number[]} [options.retryOnStatusCodes] - Status codes to retry on
+   * @returns {RequestWrapper} This instance for chaining
+   * @example
+   * request.retry({ attempts: 5, delay: 2000, retryOnStatusCodes: [503, 504] })
+   */
   retry(options) {
     this.options.retry = extend({}, this.options.retry || defaults.retry, options);
     // Handle both retryOn and retryOnStatusCodes
@@ -586,7 +672,13 @@ class RequestWrapper {
     return this;
   }
 
-  // Enable streaming
+  /**
+   * Enables streaming mode (response body will be a stream)
+   * @returns {RequestWrapper} This instance for chaining
+   * @example
+   * const response = await request.stream().exec();
+   * response.body.pipe(fs.createWriteStream('file.txt'));
+   */
   stream() {
     this.options.stream = true;
     return this;
@@ -630,7 +722,13 @@ class RequestWrapper {
     };
   }
 
-  // Execute request
+  /**
+   * Executes the HTTP request
+   * @returns {Promise<Object>} Response object with statusCode, headers, and body
+   * @example
+   * const response = await request.exec();
+   * console.log(response.statusCode, response.body);
+   */
   exec() {
     return client(this.options);
   }
@@ -648,10 +746,36 @@ class RequestWrapper {
 
 // HTTP methods
 ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'].forEach(method => {
+  /**
+   * Creates an HTTP request with the specified method
+   * @param {string} uri - The URL to request
+   * @returns {RequestWrapper} A request wrapper with fluent API methods
+   * @example
+   * const response = await nklient.get('https://api.example.com/data')
+   *   .headers({ 'Authorization': 'Bearer token' })
+   *   .timeout(5000)
+   *   .exec();
+   */
   nklient[method] = uri => new RequestWrapper(method.toUpperCase(), uri);
 });
 
-// Custom request method
+/**
+ * Creates a custom HTTP request with full options
+ * @param {string|Object} options - Request options or URL string
+ * @param {string} options.uri - The URL to request
+ * @param {string} [options.method='GET'] - HTTP method
+ * @param {Object} [options.headers] - Request headers
+ * @param {number} [options.timeout] - Request timeout in milliseconds
+ * @param {boolean} [options.followRedirects=true] - Whether to follow redirects
+ * @returns {Promise<Object>} Response object with statusCode, headers, and body
+ * @example
+ * const response = await nklient.request({
+ *   method: 'POST',
+ *   uri: 'https://api.example.com/data',
+ *   body: JSON.stringify({ key: 'value' }),
+ *   headers: { 'Content-Type': 'application/json' }
+ * });
+ */
 nklient.request = options => {
   if (typeof options === 'string') {
     options = { uri: options };
@@ -681,10 +805,27 @@ nklient.interceptors = {
   }
 };
 
-// Create new cookie jar
+/**
+ * Creates a new cookie jar for isolated cookie management
+ * @returns {CookieJar} A new tough-cookie CookieJar instance
+ * @example
+ * const jar = nklient.jar();
+ * const response = await nklient.get('https://example.com')
+ *   .jar(jar)
+ *   .exec();
+ */
 nklient.jar = () => new CookieJar();
 
-// Get cookies for a URL
+/**
+ * Retrieves cookies for a specific URL from the cookie jar
+ * @async
+ * @param {string} url - The URL to get cookies for
+ * @param {CookieJar} [jar=globalCookieJar] - Cookie jar to use (defaults to global)
+ * @returns {Promise<Cookie[]>} Array of cookies for the URL
+ * @example
+ * const cookies = await nklient.getCookies('https://example.com');
+ * console.log(cookies);
+ */
 nklient.getCookies = async (url, jar = globalCookieJar) => {
   if (!jar) {
     return [];
@@ -692,7 +833,17 @@ nklient.getCookies = async (url, jar = globalCookieJar) => {
   return jar.getCookies(url);
 };
 
-// Set a cookie for a URL
+/**
+ * Sets a cookie for a specific URL in the cookie jar
+ * @async
+ * @param {string|Cookie} cookie - Cookie string or tough-cookie Cookie object
+ * @param {string} url - The URL to set the cookie for
+ * @param {CookieJar} [jar=globalCookieJar] - Cookie jar to use (defaults to global)
+ * @returns {Promise<Cookie>} The cookie that was set
+ * @throws {Error} If no cookie jar is available
+ * @example
+ * await nklient.setCookie('sessionId=abc123; Path=/; HttpOnly', 'https://example.com');
+ */
 nklient.setCookie = async (cookie, url, jar = globalCookieJar) => {
   if (!jar) {
     throw new Error('No cookie jar available');
@@ -700,7 +851,13 @@ nklient.setCookie = async (cookie, url, jar = globalCookieJar) => {
   return jar.setCookie(cookie, url);
 };
 
-// Clear all cookies
+/**
+ * Clears all cookies from the specified cookie jar
+ * @param {CookieJar} [jar=globalCookieJar] - Cookie jar to clear (defaults to global)
+ * @example
+ * nklient.clearCookies(); // Clear global jar
+ * nklient.clearCookies(customJar); // Clear specific jar
+ */
 nklient.clearCookies = (jar = globalCookieJar) => {
   if (!jar) {
     return;
@@ -708,12 +865,33 @@ nklient.clearCookies = (jar = globalCookieJar) => {
   jar.removeAllCookiesSync();
 };
 
-// Configure defaults
+/**
+ * Configures global default options for all requests
+ * @param {Object} options - Default options to set
+ * @param {Object} [options.headers] - Default headers
+ * @param {number} [options.timeout] - Default timeout
+ * @param {Object} [options.retry] - Default retry configuration
+ * @example
+ * nklient.defaults({
+ *   timeout: 10000,
+ *   headers: { 'User-Agent': 'MyApp/1.0' }
+ * });
+ */
 nklient.defaults = options => {
   extend(defaults, options);
 };
 
-// Create instance with custom defaults
+/**
+ * Creates a new nklient instance with custom default options
+ * @deprecated Use createClient() for better configuration management
+ * @param {Object} instanceDefaults - Default options for the instance
+ * @returns {Object} New nklient instance with custom defaults
+ * @example
+ * const api = nklient.create({
+ *   baseURL: 'https://api.example.com',
+ *   timeout: 5000
+ * });
+ */
 nklient.create = instanceDefaults => {
   const instance = {};
   const mergedDefaults = extend({}, defaults, instanceDefaults);
@@ -729,7 +907,38 @@ nklient.create = instanceDefaults => {
   return instance;
 };
 
-// Create client with configuration (recommended approach)
+/**
+ * Creates a configured HTTP client with advanced features
+ * @param {string|Object} [config] - Configuration object or path to config file
+ * @param {string} [config.baseUrl] - Base URL for all requests
+ * @param {Object} [config.defaultHeaders] - Default headers for all requests
+ * @param {number} [config.timeout=30000] - Request timeout in milliseconds
+ * @param {Object} [config.retry] - Retry configuration
+ * @param {number} [config.retry.attempts=3] - Number of retry attempts
+ * @param {number} [config.retry.delay=1000] - Initial retry delay in ms
+ * @param {number[]} [config.retry.retryOnStatusCodes] - Status codes to retry on
+ * @param {boolean} [config.cookies=true] - Enable cookie jar
+ * @param {boolean} [config.followRedirects=true] - Follow HTTP redirects
+ * @param {number} [config.maxRedirects=10] - Maximum redirects to follow
+ * @param {boolean} [config.decompress=true] - Auto-decompress responses
+ * @param {boolean} [config.keepAlive=true] - Use keep-alive connections
+ * @returns {Object} Configured client instance
+ * @throws {Error} If configuration is invalid
+ * @example
+ * // Create client with configuration object
+ * const client = nklient.createClient({
+ *   baseUrl: 'https://api.example.com',
+ *   defaultHeaders: { 'Authorization': 'Bearer token' },
+ *   timeout: 10000,
+ *   retry: { attempts: 5, delay: 2000 }
+ * });
+ *
+ * // Create client from config file
+ * const client = nklient.createClient('./config/api-client.json');
+ *
+ * // Use the client
+ * const response = await client.get('/users').exec();
+ */
 nklient.createClient = config => {
   const configLoader = new ConfigLoader();
   let finalConfig;
@@ -769,8 +978,7 @@ nklient.createClient = config => {
       followRedirects: finalConfig.followRedirects,
       decompress: finalConfig.decompress,
       keepAlive: finalConfig.keepAlive,
-      ...additionalOptions,
-      uri: fullUri  // Ensure the resolved URI is not overwritten
+      ...additionalOptions
     };
 
     return options;

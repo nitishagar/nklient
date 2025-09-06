@@ -35,3 +35,8 @@ jspm_packages
 
 # Optional REPL history
 .node_repl_history
+
+# claude related files and directories
+.claude
+CLAUDE.md
+thoughts
