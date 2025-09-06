@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 const fs = require('fs');
-const { execSync } = require('child_process');
 
 // Get the new version from package.json
 const packageJson = require('../package.json');

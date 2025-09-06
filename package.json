@@ -2,7 +2,7 @@
   "name": "nklient",
   "version": "1.0.0",
   "description": "Modern, feature-rich HTTP request client for Node.js with HTTPS, cookies, retry logic, and more",
-  "main": "index.js",
+  "main": "dist/index.js",
   "types": "index.d.ts",
   "scripts": {
     "test": "mocha ./tests/ --timeout 15000 --reporter spec",
@@ -13,7 +13,10 @@
     "lint:fix": "eslint . --ext .js --fix",
     "format": "prettier --write \"**/*.{js,json,md}\"",
     "format:check": "prettier --check \"**/*.{js,json,md}\"",
-    "prepublishOnly": "npm run lint && npm test",
+    "build": "bun build ./index.js ./config/ConfigLoader.js --outdir ./dist --target node --format cjs --external ajv --external ajv-formats && cp -r config dist/",
+    "build:minify": "bun build ./index.js ./config/ConfigLoader.js --outdir ./dist --target node --format cjs --minify --external ajv --external ajv-formats && cp -r config dist/",
+    "prebuild": "rm -rf dist",
+    "prepublishOnly": "npm run build:minify && npm run lint && npm test",
     "version:patch": "npm version patch",
     "version:minor": "npm version minor",
     "version:major": "npm version major",
@@ -74,9 +77,8 @@
     "node": ">=14.0.0"
   },
   "files": [
-    "index.js",
+    "dist/",
     "index.d.ts",
-    "util/",
     "LICENSE",
     "README.md"
   ]
