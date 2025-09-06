@@ -95,4 +95,28 @@ describe('Memory Leak Tests', function() {
       expect(result.passed).to.be.true;
     });
   });
+
+  describe('Cookie Jar Cleanup', () => {
+    it('should provide methods to clean up cookies and agents', async () => {
+      // Add many cookies
+      for (let i = 0; i < 100; i++) {
+        await nklient.setCookie(`test${i}=value${i}`, 'http://example.com');
+      }
+      
+      const jarSizeBefore = (await nklient.getCookies('http://example.com')).length;
+      expect(jarSizeBefore).to.be.above(50);
+      
+      // Clear cookies
+      nklient.clearCookies();
+      
+      const jarSizeAfter = (await nklient.getCookies('http://example.com')).length;
+      expect(jarSizeAfter).to.equal(0);
+    });
+    
+    it('should have cleanup method for all resources', () => {
+      expect(nklient.cleanup).to.be.a('function');
+      expect(nklient.clearProxyAgents).to.be.a('function');
+      expect(nklient.closeAgents).to.be.a('function');
+    });
+  });
 });

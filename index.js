@@ -932,6 +932,41 @@ nklient.clearCookies = (jar = globalCookieJar) => {
 };
 
 /**
+ * Clears all cached proxy agents
+ * @example
+ * nklient.clearProxyAgents(); // Free up proxy agent resources
+ */
+nklient.clearProxyAgents = () => {
+  proxyAgents.forEach(agent => {
+    if (agent.destroy) agent.destroy();
+  });
+  proxyAgents.clear();
+};
+
+/**
+ * Closes the global HTTP/HTTPS agents
+ * @example
+ * nklient.closeAgents(); // Close all keep-alive connections
+ */
+nklient.closeAgents = () => {
+  if (agents.http.destroy) agents.http.destroy();
+  if (agents.https.destroy) agents.https.destroy();
+};
+
+/**
+ * Cleans up all global resources (cookies, agents, interceptors)
+ * @example
+ * nklient.cleanup(); // Full cleanup, useful for tests
+ */
+nklient.cleanup = () => {
+  nklient.clearCookies();
+  nklient.clearProxyAgents();
+  nklient.closeAgents();
+  interceptors.request = [];
+  interceptors.response = [];
+};
+
+/**
  * Configures global default options for all requests
  * @param {Object} options - Default options to set
  * @param {Object} [options.headers] - Default headers
