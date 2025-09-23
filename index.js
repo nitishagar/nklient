@@ -8,7 +8,7 @@ const { pipeline: pipelineAsync } = require('stream');
 const { URL } = require('url');
 const { extend, isJSON } = require('./util');
 const { ConfigLoader } = require('./config/ConfigLoader'); // Fixed path
-const { globalCookieJar, CookieJar } = require('./cookie');
+const { globalCookieJar, CookieJar } = require('./cookie/globalCookieJar'); // Fixed path
 const { LRUCache } = require('lru-cache');
 
 const agents = {
