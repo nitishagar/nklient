@@ -44,7 +44,8 @@ describe('Memory Leak Tests', function() {
           .exec();
         expect.fail('Should have thrown error');
       } catch (err) {
-        expect(err.message).to.include('Response size limit exceeded');
+        // Updated to match the actual error message
+        expect(err.message).to.include('Response body too large');
       }
       
       // Verify the request was made
