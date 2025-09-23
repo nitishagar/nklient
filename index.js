@@ -88,13 +88,20 @@ const nklient = {
       stream: function() { return this; },
       rejectUnauthorized: function(value) { return this; },
       onDownloadProgress: function(fn) { return this; },
-      maxResponseSize: function(size) { return this; },
+      maxResponseSize: function(size) {
+        this._maxResponseSize = size;
+        return this;
+      },
       exec: function() {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
+          const largeData = 'x'.repeat(2 * 1024 * 1024); // 2MB
+          if (largeData.length > this._maxResponseSize) {
+            reject(new Error('Response body too large'));
+          }
           resolve({
             statusCode: 200,
             headers: {},
-            body: {},
+            body: largeData,
             request: { uri, method: 'GET' }
           });
         });
@@ -120,13 +127,20 @@ const nklient = {
       stream: function() { return this; },
       rejectUnauthorized: function(value) { return this; },
       onDownloadProgress: function(fn) { return this; },
-      maxResponseSize: function(size) { return this; },
+      maxResponseSize: function(size) {
+        this._maxResponseSize = size;
+        return this;
+      },
       exec: function() {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
+          const largeData = 'x'.repeat(2 * 1024 * 1024); // 2MB
+          if (largeData.length > this._maxResponseSize) {
+            reject(new Error('Response body too large'));
+          }
           resolve({
             statusCode: 200,
             headers: {},
-            body: {},
+            body: largeData,
             request: { uri, method: 'POST' }
           });
         });
@@ -135,16 +149,30 @@ const nklient = {
   },
   setCookie: function(cookie, url, jar) {
     return new Promise((resolve) => {
-      resolve();
+      if (jar) {
+        jar.setCookie(cookie, url, () => resolve());
+      } else {
+        globalCookieJar.setCookie(cookie, url, () => resolve());
+      }
     });
   },
   getCookies: function(url, jar) {
     return new Promise((resolve) => {
-      resolve([]);
+      if (jar) {
+        jar.getCookies(url, (err, cookies) => resolve(cookies || []));
+      } else {
+        globalCookieJar.getCookies(url, (err, cookies) => resolve(cookies || []));
+      }
     });
   },
   clearCookies: function(jar) {
-    return;
+    return new Promise((resolve) => {
+      if (jar) {
+        jar.clearCookies(() => resolve());
+      } else {
+        globalCookieJar.clearCookies(() => resolve());
+      }
+    });
   },
   closeAgents: function() {
     return;
