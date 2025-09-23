@@ -14,7 +14,7 @@ const { LRUCache } = require('lru-cache');
 const agents = {
   http: new http.Agent({ keepAlive: true, maxSockets: 50 }),
   https: new https.Agent({ keepAlive: true, maxSockets: 50 }),
-  http2: new http2.Http2Agent({ keepAlive: true, maxSockets: 50 }) // Corrected to Http2Agent
+  // http2: new http2.Http2Agent({ keepAlive: true, maxSockets: 50 }) // Removed: http2.Http2Agent is not a constructor
 };
 
 const interceptors = {
