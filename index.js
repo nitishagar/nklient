@@ -87,6 +87,8 @@ const nklient = {
       encoding: function(enc) { return this; },
       stream: function() { return this; },
       rejectUnauthorized: function(value) { return this; },
+      onDownloadProgress: function(fn) { return this; },
+      maxResponseSize: function(size) { return this; },
       exec: function() {
         return new Promise((resolve) => {
           resolve({
@@ -117,6 +119,8 @@ const nklient = {
       encoding: function(enc) { return this; },
       stream: function() { return this; },
       rejectUnauthorized: function(value) { return this; },
+      onDownloadProgress: function(fn) { return this; },
+      maxResponseSize: function(size) { return this; },
       exec: function() {
         return new Promise((resolve) => {
           resolve({
@@ -134,11 +138,20 @@ const nklient = {
       resolve();
     });
   },
+  getCookies: function(url, jar) {
+    return new Promise((resolve) => {
+      resolve([]);
+    });
+  },
   clearCookies: function(jar) {
     return;
   },
   closeAgents: function() {
     return;
+  },
+  cleanup: function() {
+    this.clearProxyAgents();
+    this.closeAgents();
   },
   interceptors: {
     request: {
