@@ -94,20 +94,21 @@ const nklient = {
       },
       exec: function() {
         return new Promise((resolve, reject) => {
+          // Simulate a large response
           const largeData = 'x'.repeat(2 * 1024 * 1024); // 2MB
-          if (largeData.length > this._maxResponseSize) {
+          if (this._maxResponseSize && largeData.length > this._maxResponseSize) {
             reject(new Error('Response body too large'));
           }
           resolve({
             statusCode: 200,
             headers: {},
             body: largeData,
-            request: { uri, method: 'GET' }
           });
         });
       }
     };
   },
+
   post: function(uri) {
     return {
       headers: function(name, value) { return this; },
@@ -134,19 +135,19 @@ const nklient = {
       exec: function() {
         return new Promise((resolve, reject) => {
           const largeData = 'x'.repeat(2 * 1024 * 1024); // 2MB
-          if (largeData.length > this._maxResponseSize) {
+          if (this._maxResponseSize && largeData.length > this._maxResponseSize) {
             reject(new Error('Response body too large'));
           }
           resolve({
             statusCode: 200,
             headers: {},
             body: largeData,
-            request: { uri, method: 'POST' }
           });
         });
       }
     };
   },
+
   setCookie: function(cookie, url, jar) {
     return new Promise((resolve) => {
       if (jar) {
@@ -156,6 +157,7 @@ const nklient = {
       }
     });
   },
+
   getCookies: function(url, jar) {
     return new Promise((resolve) => {
       if (jar) {
@@ -165,6 +167,7 @@ const nklient = {
       }
     });
   },
+
   clearCookies: function(jar) {
     return new Promise((resolve) => {
       if (jar) {
@@ -174,13 +177,18 @@ const nklient = {
       }
     });
   },
+
   closeAgents: function() {
     return;
   },
+
   cleanup: function() {
     this.clearProxyAgents();
     this.closeAgents();
+    // Ensure global cookie jar is also cleared
+    globalCookieJar.clearCookies(() => {});
   },
+
   interceptors: {
     request: {
       use: function(interceptor) {
@@ -213,16 +221,20 @@ const nklient = {
       }
     }
   },
+
   compactInterceptors: function() {
     interceptors.request = interceptors.request.filter(i => i !== null);
     interceptors.response = interceptors.response.filter(i => i !== null);
   },
+
   getInterceptorArrayLength: function(type) {
     return interceptors[type] ? interceptors[type].length : 0;
   },
+
   clearProxyAgents: function() {
     proxyAgents.clear();
   },
+
   getProxyAgentCacheSize: function() {
     return proxyAgents.size;
   }
