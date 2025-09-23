@@ -94,9 +94,7 @@ const nklient = {
       },
       exec: function() {
         return new Promise((resolve, reject) => {
-          // Simulate a dynamic response body
-          const responseSize = this._maxResponseSize || 2 * 1024 * 1024; // 2MB default
-          const largeData = 'x'.repeat(responseSize);
+          const largeData = 'x'.repeat(2 * 1024 * 1024); // 2MB
           if (this._maxResponseSize && largeData.length > this._maxResponseSize) {
             reject(new Error('Response body too large'));
           }
@@ -135,8 +133,7 @@ const nklient = {
       },
       exec: function() {
         return new Promise((resolve, reject) => {
-          const responseSize = this._maxResponseSize || 2 * 1024 * 1024;
-          const largeData = 'x'.repeat(responseSize);
+          const largeData = 'x'.repeat(2 * 1024 * 1024); // 2MB
           if (this._maxResponseSize && largeData.length > this._maxResponseSize) {
             reject(new Error('Response body too large'));
           }
