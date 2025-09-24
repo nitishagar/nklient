@@ -28,6 +28,10 @@ declare module 'nklient' {
     retry?: RetryOptions;
     stream?: boolean;
     rejectUnauthorized?: boolean;
+    allowHttpsToHttp?: boolean;
+    blockPrivateNetworks?: boolean;
+    allowedDomains?: string[];
+    blockedDomains?: string[];
     [key: string]: any;
   }
 
@@ -83,6 +87,10 @@ declare module 'nklient' {
     encoding(enc: string | null): this;
     stream(): this;
     rejectUnauthorized(value: boolean): this;
+    allowHttpsToHttp(value?: boolean): this;
+    blockPrivateNetworks(value?: boolean): this;
+    allowedDomains(domains: string[]): this;
+    blockedDomains(domains: string[]): this;
     exec(): Promise<Response | StreamResponse>;
     then<TResult1 = Response | StreamResponse, TResult2 = never>(
       onfulfilled?: ((value: Response | StreamResponse) => TResult1 | PromiseLike<TResult1>) | undefined | null,
@@ -127,3 +135,6 @@ declare module 'nklient' {
   export default nklient;
   export = nklient;
 }
+```
+
+index.js
