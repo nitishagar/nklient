@@ -99,6 +99,7 @@ declare module 'nklient' {
     catch<TResult = never>(
       onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null
     ): Promise<Response | StreamResponse | TResult>;
+    _cleanupListeners(): void;
   }
 
   export interface Cookie {
@@ -129,12 +130,12 @@ declare module 'nklient' {
     clearCookies(jar?: CookieJar): void;
     defaults(options: Partial<RequestOptions>): void;
     create(defaults?: Partial<RequestOptions>): NKlient;
+    clearProxyAgents(): void;
+    closeAgents(): void;
+    cleanup(): void;
   }
 
   const nklient: NKlient;
   export default nklient;
   export = nklient;
 }
-```
-
-index.js
