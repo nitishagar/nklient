@@ -23,7 +23,7 @@ const agents = {
   https: new https.Agent({ keepAlive: true, maxSockets: 50 }),
 };
 
-if (http2) {
+if (http2 && typeof http2.Http2Agent === 'function') {
   agents.http2 = new http2.Http2Agent({ keepAlive: true, maxSockets: 50 });
 }
 
