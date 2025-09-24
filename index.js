@@ -6,8 +6,8 @@ const zlib = require('zlib');
 const { pipeline: pipelineAsync } = require('stream');
 const { URL } = require('url');
 const { extend, isJSON } = require('./util');
-const { ConfigLoader } = require('./config/ConfigLoader'); // Fixed path
-const { globalCookieJar, CookieJar } = require('./cookie/globalCookieJar'); // Fixed path
+const { ConfigLoader } = require('./config/ConfigLoader');
+const { globalCookieJar, CookieJar } = require('./cookie/globalCookieJar');
 const { LRUCache } = require('lru-cache');
 
 // Check if http2 is available
@@ -80,120 +80,20 @@ const proxyAgents = new ProxyAgentCache();
 
 const nklient = {
   createClient: function (config) {
+    const configLoader = new ConfigLoader();
+    const defaultConfig = configLoader.getDefaultConfig();
+    const mergedConfig = configLoader.mergeConfigs(defaultConfig, config);
+
     return {
       get: function (uri) {
-        return {
-          headers: function (name, value) { return this; },
-          body: function (data) { return this; },
-          timeout: function (ms) { return this; },
-          query: function (params) { return this; },
-          form: function (data) { return this; },
-          json: function (data) { return this; },
-          proxy: function (proxyUrl) { return this; },
-          agent: function (agent) { return this; },
-          jar: function (jar) { return this; },
-          noJar: function () { return this; },
-          cookies: function (cookies) { return this; },
-          retry: function (options) { return this; },
-          maxRedirects: function (count) { return this; },
-          encoding: function (enc) { return this; },
-          stream: function () { return this; },
-          rejectUnauthorized: function (value) { return this; },
-          onDownloadProgress: function (fn) { return this; },
-          maxResponseSize: function (size) {
-            this._maxResponseSize = size;
-            return this;
-          },
-          exec: function () {
-            return new Promise((resolve, reject) => {
-              const largeData = 'x'.repeat(2 * 1024 * 1024); // 2MB
-              if (this._maxResponseSize && largeData.length > this._maxResponseSize) {
-                reject(new Error('Response body too large'));
-              }
-              resolve({
-                statusCode: 200,
-                headers: {},
-                body: largeData,
-              });
-            });
-          }
-        };
+        return this._createRequest('GET', uri, mergedConfig);
       },
       post: function (uri) {
-        return {
-          headers: function (name, value) { return this; },
-          body: function (data) { return this; },
-          timeout: function (ms) { return this; },
-          query: function (params) { return this; },
-          form: function (data) { return this; },
-          json: function (data) { return this; },
-          proxy: function (proxyUrl) { return this; },
-          agent: function (agent) { return this; },
-          jar: function (jar) { return this; },
-          noJar: function () { return this; },
-          cookies: function (cookies) { return this; },
-          retry: function (options) { return this; },
-          maxRedirects: function (count) { return this; },
-          encoding: function (enc) { return this; },
-          stream: function () { return this; },
-          rejectUnauthorized: function (value) { return this; },
-          onDownloadProgress: function (fn) { return this; },
-          maxResponseSize: function (size) {
-            this._maxResponseSize = size;
-            return this;
-          },
-          exec: function () {
-            return new Promise((resolve, reject) => {
-              const largeData = 'x'.repeat(2 * 1024 * 1024); // 2MB
-              if (this._maxResponseSize && largeData.length > this._maxResponseSize) {
-                reject(new Error('Response body too large'));
-              }
-              resolve({
-                statusCode: 200,
-                headers: {},
-                body: largeData,
-              });
-            });
-          }
-        };
+        return this._createRequest('POST', uri, mergedConfig);
       },
       request: function (options) {
-        return {
-          headers: function (name, value) { return this; },
-          body: function (data) { return this; },
-          timeout: function (ms) { return this; },
-          query: function (params) { return this; },
-          form: function (data) { return this; },
-          json: function (data) { return this; },
-          proxy: function (proxyUrl) { return this; },
-          agent: function (agent) { return this; },
-          jar: function (jar) { return this; },
-          noJar: function () { return this; },
-          cookies: function (cookies) { return this; },
-          retry: function (options) { return this; },
-          maxRedirects: function (count) { return this; },
-          encoding: function (enc) { return this; },
-          stream: function () { return this; },
-          rejectUnauthorized: function (value) { return this; },
-          onDownloadProgress: function (fn) { return this; },
-          maxResponseSize: function (size) {
-            this._maxResponseSize = size;
-            return this;
-          },
-          exec: function () {
-            return new Promise((resolve, reject) => {
-              const largeData = 'x'.repeat(2 * 1024 * 1024); // 2MB
-              if (this._maxResponseSize && largeData.length > this._maxResponseSize) {
-                reject(new Error('Response body too large'));
-              }
-              resolve({
-                statusCode: 200,
-                headers: {},
-                body: largeData,
-              });
-            });
-          }
-        };
+        const uri = typeof options === 'string' ? options : options.uri;
+        return this._createRequest(options.method || 'GET', uri, mergedConfig);
       },
       interceptors: {
         request: {
@@ -243,161 +143,216 @@ const nklient = {
     };
   },
 
-  get: function (uri) {
+  _createRequest: function (method, uri, config) {
     return {
-      headers: function (name, value) { return this; },
-      body: function (data) { return this; },
-      timeout: function (ms) { return this; },
-      query: function (params) { return this; },
-      form: function (data) { return this; },
-      json: function (data) { return this; },
-      proxy: function (proxyUrl) { return this; },
-      agent: function (agent) { return this; },
-      jar: function (jar) { return this; },
-      noJar: function () { return this; },
-      cookies: function (cookies) { return this; },
-      retry: function (options) { return this; },
-      maxRedirects: function (count) { return this; },
-      encoding: function (enc) { return this; },
-      stream: function () { return this; },
-      rejectUnauthorized: function (value) { return this; },
-      onDownloadProgress: function (fn) { return this; },
+      headers: function (name, value) {
+        this._headers = this._headers || {};
+        if (typeof name === 'string' && typeof value === 'string') {
+          this._headers[name] = value;
+        } else if (typeof name === 'object') {
+          this._headers = { ...this._headers, ...name };
+        }
+        return this;
+      },
+      body: function (data) {
+        this._body = data;
+        return this;
+      },
+      timeout: function (ms) {
+        this._timeout = ms;
+        return this;
+      },
+      query: function (params) {
+        this._query = params;
+        return this;
+      },
+      form: function (data) {
+        this._form = data;
+        return this;
+      },
+      json: function (data) {
+        this._json = data;
+        return this;
+      },
+      proxy: function (proxyUrl) {
+        this._proxy = proxyUrl;
+        return this;
+      },
+      agent: function (agent) {
+        this._agent = agent;
+        return this;
+      },
+      jar: function (jar) {
+        this._jar = jar;
+        return this;
+      },
+      noJar: function () {
+        this._jar = null;
+        return this;
+      },
+      cookies: function (cookies) {
+        this._cookies = cookies;
+        return this;
+      },
+      retry: function (options) {
+        this._retry = options;
+        return this;
+      },
+      maxRedirects: function (count) {
+        this._maxRedirects = count;
+        return this;
+      },
+      encoding: function (enc) {
+        this._encoding = enc;
+        return this;
+      },
+      stream: function () {
+        this._stream = true;
+        return this;
+      },
+      rejectUnauthorized: function (value) {
+        this._rejectUnauthorized = value;
+        return this;
+      },
+      onDownloadProgress: function (fn) {
+        this._onDownloadProgress = fn;
+        return this;
+      },
       maxResponseSize: function (size) {
         this._maxResponseSize = size;
         return this;
       },
       exec: function () {
         return new Promise((resolve, reject) => {
-          const largeData = 'x'.repeat(2 * 1024 * 1024); // 2MB
-          if (this._maxResponseSize && largeData.length > this._maxResponseSize) {
-            reject(new Error('Response body too large'));
-          }
-          resolve({
-            statusCode: 200,
-            headers: {},
-            body: largeData,
-          });
-        });
-      }
-    };
-  },
+          const urlObj = new URL(uri);
+          const protocol = urlObj.protocol === 'http2:' ? 'http2' : urlObj.protocol.replace(':', '');
+          const agent = this._agent || agents[protocol] || agents.http;
 
-  post: function (uri) {
-    return {
-      headers: function (name, value) { return this; },
-      body: function (data) { return this; },
-      timeout: function (ms) { return this; },
-      query: function (params) { return this; },
-      form: function (data) { return this; },
-      json: function (data) { return this; },
-      proxy: function (proxyUrl) { return this; },
-      agent: function (agent) { return this; },
-      jar: function (jar) { return this; },
-      noJar: function () { return this; },
-      cookies: function (cookies) { return this; },
-      retry: function (options) { return this; },
-      maxRedirects: function (count) { return this; },
-      encoding: function (enc) { return this; },
-      stream: function () { return this; },
-      rejectUnauthorized: function (value) { return this; },
-      onDownloadProgress: function (fn) { return this; },
-      maxResponseSize: function (size) {
-        this._maxResponseSize = size;
-        return this;
-      },
-      exec: function () {
-        return new Promise((resolve, reject) => {
-          const largeData = 'x'.repeat(2 * 1024 * 1024); // 2MB
-          if (this._maxResponseSize && largeData.length > this._maxResponseSize) {
-            reject(new Error('Response body too large'));
-          }
-          resolve({
-            statusCode: 200,
-            headers: {},
-            body: largeData,
-          });
-        });
-      }
-    };
-  },
+          const requestOptions = {
+            method,
+            hostname: urlObj.hostname,
+            port: urlObj.port || (protocol === 'https' ? 443 : 80),
+            path: `${urlObj.pathname}${urlObj.search}`,
+            headers: {
+              ...this._headers,
+              ...config.defaultHeaders
+            },
+            agent,
+            rejectUnauthorized: this._rejectUnauthorized ?? config.rejectUnauthorized
+          };
 
-  request: function (options) {
-    return {
-      headers: function (name, value) { return this; },
-      body: function (data) { return this; },
-      timeout: function (ms) { return this; },
-      query: function (params) { return this; },
-      form: function (data) { return this; },
-      json: function (data) { return this; },
-      proxy: function (proxyUrl) { return this; },
-      agent: function (agent) { return this; },
-      jar: function (jar) { return this; },
-      noJar: function () { return this; },
-      cookies: function (cookies) { return this; },
-      retry: function (options) { return this; },
-      maxRedirects: function (count) { return this; },
-      encoding: function (enc) { return this; },
-      stream: function () { return this; },
-      rejectUnauthorized: function (value) { return this; },
-      onDownloadProgress: function (fn) { return this; },
-      maxResponseSize: function (size) {
-        this._maxResponseSize = size;
-        return this;
-      },
-      exec: function () {
-        return new Promise((resolve, reject) => {
-          const largeData = 'x'.repeat(2 * 1024 * 1024); // 2MB
-          if (this._maxResponseSize && largeData.length > this._maxResponseSize) {
-            reject(new Error('Response body too large'));
+          if (this._proxy) {
+            requestOptions.agent = this._proxy;
           }
-          resolve({
-            statusCode: 200,
-            headers: {},
-            body: largeData,
+
+          const req = (protocol === 'http2' ? http2 : (protocol === 'https' ? https : http)).request(requestOptions, (res) => {
+            let data = [];
+
+            res.on('data', (chunk) => {
+              data.push(chunk);
+              if (this._onDownloadProgress) {
+                this._onDownloadProgress({ loaded: data.length, total: res.headers['content-length'] });
+              }
+            });
+
+            res.on('end', () => {
+              const body = data.join('');
+              const response = {
+                statusCode: res.statusCode,
+                headers: res.headers,
+                body: this._encoding === null ? Buffer.from(body) : body
+              };
+
+              if (this._stream) {
+                response.body = Buffer.concat(data);
+              }
+
+              if (this._maxResponseSize && response.body.length > this._maxResponseSize) {
+                reject(new Error('Response body too large'));
+                return;
+              }
+
+              resolve(response);
+            });
+
+            res.on('error', (err) => {
+              reject(err);
+            });
           });
+
+          req.on('error', (err) => {
+            reject(err);
+          });
+
+          if (this._body) {
+            req.write(this._body);
+          }
+
+          req.end();
         });
       }
     };
   },
 
   setCookie: function (cookie, url, jar) {
-    return new Promise((resolve) => {
-      if (jar) {
-        jar.setCookie(cookie, url, () => resolve());
-      } else {
-        globalCookieJar.setCookie(cookie, url, () => resolve());
+    return new Promise((resolve, reject) => {
+      if (!jar) {
+        reject(new Error('No cookie jar available'));
+        return;
       }
+      jar.setCookie(cookie, url, (err) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
     });
   },
 
   getCookies: function (url, jar) {
-    return new Promise((resolve) => {
-      if (jar) {
-        jar.getCookies(url, (err, cookies) => resolve(cookies || []));
-      } else {
-        globalCookieJar.getCookies(url, (err, cookies) => resolve(cookies || []));
+    return new Promise((resolve, reject) => {
+      if (!jar) {
+        resolve([]);
+        return;
       }
+      jar.getCookies(url, (err, cookies) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(cookies || []);
+        }
+      });
     });
   },
 
   clearCookies: function (jar) {
-    return new Promise((resolve) => {
-      if (jar) {
-        jar.clearCookies(() => resolve());
-      } else {
-        globalCookieJar.clearCookies(() => resolve());
+    return new Promise((resolve, reject) => {
+      if (!jar) {
+        resolve();
+        return;
       }
+      jar.clearCookies((err) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
     });
   },
 
   closeAgents: function () {
-    return;
+    Object.values(agents).forEach(agent => {
+      if (agent && typeof agent.destroy === 'function') {
+        agent.destroy();
+      }
+    });
   },
 
   cleanup: function () {
     this.clearProxyAgents();
     this.closeAgents();
-    // Ensure global cookie jar is also cleared
     globalCookieJar.clearCookies(() => {});
   },
 
