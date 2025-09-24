@@ -1,6 +1,5 @@
 const http = require('http');
 const https = require('https');
-const http2 = require('http2'); // Uncommented for HTTP/2 support
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
@@ -11,11 +10,22 @@ const { ConfigLoader } = require('./config/ConfigLoader'); // Fixed path
 const { globalCookieJar, CookieJar } = require('./cookie/globalCookieJar'); // Fixed path
 const { LRUCache } = require('lru-cache');
 
+// Check if http2 is available
+let http2;
+try {
+  http2 = require('http2');
+} catch (e) {
+  http2 = null;
+}
+
 const agents = {
   http: new http.Agent({ keepAlive: true, maxSockets: 50 }),
   https: new https.Agent({ keepAlive: true, maxSockets: 50 }),
-  http2: new http2.Http2Agent({ keepAlive: true, maxSockets: 50 }) // Uncommented
 };
+
+if (http2) {
+  agents.http2 = new http2.Http2Agent({ keepAlive: true, maxSockets: 50 });
+}
 
 const interceptors = {
   request: [],
