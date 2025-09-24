@@ -207,7 +207,7 @@ describe('nklient', () => {
         const originalWarn = console.warn;
         let warningCalled = false;
 
-        console.warn = (message) => {
+        console.warn = message => {
           if (message.includes('SSL certificate verification disabled')) {
             warningCalled = true;
           }
@@ -242,7 +242,7 @@ describe('nklient', () => {
         const originalError = console.error;
         let errorCalled = false;
 
-        console.error = (message) => {
+        console.error = message => {
           if (message.includes('SSL verification disabled in production environment')) {
             errorCalled = true;
           }

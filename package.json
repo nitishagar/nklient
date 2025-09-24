@@ -11,6 +11,7 @@
     "test:ci": "nyc --reporter=lcov mocha ./tests/ --timeout 15000 --reporter spec",
     "test:memory": "NODE_OPTIONS=\"--expose-gc --max-old-space-size=512\" mocha ./tests/memory-leaks.test.js --timeout 60000",
     "test:oom": "NODE_OPTIONS=\"--expose-gc --max-old-space-size=512\" npm test",
+    "benchmark": "node --expose-gc scripts/benchmarks.js",
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
     "format": "prettier --write \"**/*.{js,json,md}\"",
@@ -58,7 +59,9 @@
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "http-proxy-agent": "^7.0.0",
+    "http2": "^3.3.6",
     "https-proxy-agent": "^7.0.2",
+    "lru-cache": "^11.2.1",
     "tough-cookie": "^4.1.3"
   },
   "devDependencies": {

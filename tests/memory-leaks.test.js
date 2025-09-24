@@ -3,13 +3,13 @@ const nock = require('nock');
 const { detectMemoryLeak } = require('./memory-utils');
 const nklient = require('../index');
 
-describe('Memory Leak Tests', function() {
+describe('Memory Leak Tests', function () {
   this.timeout(60000); // Long timeout for memory tests
-  
+
   afterEach(() => {
     nock.cleanAll();
   });
-  
+
   describe('Proxy Agent Memory Leak', () => {
     it('should not leak memory when creating proxy agents', async () => {
       // Note: Some memory growth is expected due to proxy agent internals
@@ -35,11 +35,11 @@ describe('Memory Leak Tests', function() {
     it('should reject responses larger than maxResponseSize', async () => {
       // Create a 2MB string instead of 10MB to reduce memory usage
       const largeData = 'x'.repeat(2 * 1024 * 1024); // 2MB
-      
+
       const scope = nock('http://example.com')
         .get('/large')
         .reply(200, largeData);
-      
+
       try {
         await nklient.get('http://example.com/large')
           .maxResponseSize(1024 * 1024) // 1MB limit
@@ -49,7 +49,7 @@ describe('Memory Leak Tests', function() {
         // Updated to match the actual error message
         expect(err.message).to.include('Response body too large');
       }
-      
+
       // Verify the request was made
       expect(scope.isDone()).to.be.true;
     });
@@ -61,7 +61,7 @@ describe('Memory Leak Tests', function() {
         const id = nklient.interceptors.request.use(config => config);
         nklient.interceptors.request.eject(id);
       }, { iterations: 1000 });
-      
+
       expect(result.passed).to.be.true;
       // Check internal state - we'll need to expose this for testing
       // expect(interceptors.request.length).to.be.below(100);
@@ -80,21 +80,21 @@ describe('Memory Leak Tests', function() {
       const result = await detectMemoryLeak(async () => {
         nock('http://example.com')
           .get('/stream')
-          .reply(200, function() {
+          .reply(200, function () {
             return require('stream').Readable.from(['data']);
           });
-        
+
         const response = await nklient.get('http://example.com/stream')
           .stream()
           .onDownloadProgress(() => {})
           .exec();
-        
+
         // Consume stream
         for await (const chunk of response.body) {
           // Process chunk
         }
       });
-      
+
       expect(result.passed).to.be.true;
     });
   });
@@ -120,7 +120,7 @@ describe('Memory Leak Tests', function() {
       // After clearing the global jar, the local jar should still have cookies
       expect(jarSizeAfter).to.be.above(50);
     });
-    
+
     it('should have cleanup method for all resources', () => {
       expect(nklient.cleanup).to.be.a('function');
       expect(nklient.clearProxyAgents).to.be.a('function');

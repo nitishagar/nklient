@@ -43,3 +43,22 @@ thoughts
 
 # Build output
 dist/
+
+# Backup and temporary files
+*.backup
+*.tmp
+*.temp
+*~
+
+# Editor files
+.aider*
+.claude/
+.cursor/
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
