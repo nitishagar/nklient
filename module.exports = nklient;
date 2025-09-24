@@ -1,0 +1,6 @@
+
+---
+
+### 2. **Re-enable Event Listener Test in `tests/memory-leaks.test.js`**
+
+tests/memory-leaks.test.js
