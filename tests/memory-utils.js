@@ -14,21 +14,21 @@ function getHeapUsed() {
 async function detectMemoryLeak(testFn, options = {}) {
   const iterations = options.iterations || 100;
   const threshold = options.threshold || 1024 * 1024; // 1MB default
-  
+
   forceGarbageCollection();
   const initialHeap = getHeapUsed();
-  
+
   for (let i = 0; i < iterations; i++) {
     await testFn();
   }
-  
+
   forceGarbageCollection();
   await new Promise(resolve => setTimeout(resolve, 100));
   forceGarbageCollection();
-  
+
   const finalHeap = getHeapUsed();
   const growth = finalHeap - initialHeap;
-  
+
   return {
     passed: growth < threshold,
     growth,

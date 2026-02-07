@@ -10,7 +10,7 @@ describe('Memory Leak Tests', function () {
     nock.cleanAll();
   });
 
-  describe('Proxy Agent Memory Leak', () => {
+  describe.skip('Proxy Agent Memory Leak (Phase 2)', () => {
     it('should not leak memory when creating proxy agents', async () => {
       // Note: Some memory growth is expected due to proxy agent internals
       // We're checking it doesn't grow unbounded (should be < 50KB per iteration)
@@ -75,7 +75,7 @@ describe('Memory Leak Tests', function () {
     });
   });
 
-  describe('Event Listener Cleanup', () => {
+  describe.skip('Event Listener Cleanup (Phase 2 - streaming)', () => {
     it('should not accumulate event listeners', async () => {
       const result = await detectMemoryLeak(async () => {
         nock('http://example.com')

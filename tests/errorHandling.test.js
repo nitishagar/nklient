@@ -82,11 +82,14 @@ describe('Error Handling', () => {
       nock('http://example.com')
         .get('/stream-error')
         .reply(200, function () {
+          let pushed = false;
           const stream = new Readable({
             read() {
-              this.push('some data');
-              // Emit an error after some data
-              process.nextTick(() => this.emit('error', new Error('Stream error')));
+              if (!pushed) {
+                pushed = true;
+                this.push('some data');
+                process.nextTick(() => this.destroy(new Error('Stream error')));
+              }
             }
           });
           return stream;
@@ -169,15 +172,14 @@ describe('Error Handling', () => {
 
   describe('Timeout Handling', () => {
     it('should properly handle timeout errors', async () => {
-      // Use a real timeout scenario without nock
-      const originalClient = require('../index');
-
-      // Create a custom instance that will timeout
-      const timeoutClient = originalClient.create({ timeout: 1 });
+      // Use nock with delay to reliably trigger timeout
+      nock('http://example.com')
+        .get('/slow')
+        .delayConnection(500)
+        .reply(200, { data: 'slow' });
 
       try {
-        // Try to connect to a non-routable IP address which will timeout
-        await timeoutClient.get('http://192.0.2.1/test').exec();
+        await nklient.get('http://example.com/slow').timeout(50).exec();
         expect.fail('Should have timed out');
       } catch (error) {
         expect(error.code).to.equal('ETIMEDOUT');

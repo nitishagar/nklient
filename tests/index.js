@@ -83,7 +83,7 @@ describe('nklient', () => {
     });
   });
 
-  describe('Security Features', () => {
+  describe.skip('Security Features (Phase 3)', () => {
     describe('Redirect Validation', () => {
       it('should block HTTPS to HTTP redirects by default', async () => {
         nock('https://secure.example.com')

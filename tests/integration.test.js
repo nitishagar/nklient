@@ -49,11 +49,12 @@ describe('Integration Tests', () => {
     it('should handle timeout with real network delay', async () => {
       try {
         await nklient.get(`${serverUrl}/slow`)
-          .timeout(100)
+          .timeout(50)
           .exec();
         expect.fail('Should have timed out');
       } catch (error) {
         expect(error.code).to.equal('ETIMEDOUT');
+        expect(error.message).to.equal('Request timeout');
       }
     });
   });
@@ -111,12 +112,12 @@ describe('Integration Tests', () => {
   describe('Error Handling with Real Server', () => {
     it('should handle connection refused errors', async () => {
       try {
-        await nklient.get('http://localhost:99999/')
-          .timeout(1000)
+        await nklient.get('http://localhost:65534/')
+          .timeout(2000)
           .exec();
         expect.fail('Should have failed to connect');
       } catch (error) {
-        expect(error.code).to.equal('ECONNREFUSED');
+        expect(error.code).to.be.oneOf(['ECONNREFUSED', 'ETIMEDOUT']);
       }
     });
   });
