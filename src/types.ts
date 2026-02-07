@@ -33,6 +33,7 @@ export interface RequestConfig {
   uri: string;
   headers: Record<string, string>;
   body?: string | Buffer;
+  formData?: any;
   timeout: number;
   maxRedirects: number;
   followRedirects: boolean;

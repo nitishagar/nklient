@@ -10,7 +10,8 @@ import { urlCache } from './util/url-cache';
 import { addQueryToUrl } from './util/query-builder';
 import ConfigLoader from './config/ConfigLoader';
 import { globalCookieJar, CookieJar } from './cookie/globalCookieJar';
-import { TimeoutError, RetryExhaustedError } from './errors';
+import FormData from 'form-data';
+import { TimeoutError, RetryExhaustedError, AbortError } from './errors';
 import {
   ClientConfig,
   RequestConfig,
@@ -138,6 +139,9 @@ class RequestWrapper {
   _followRedirects: boolean;
   _decompress: boolean;
   _cookies: string | Record<string, string> | null;
+  _signal: AbortSignal | null;
+  _multipartFields: Record<string, any> | null;
+  _attachments: { field: string; value: Buffer | NodeJS.ReadableStream; filename: string }[];
   private interceptors: InterceptorArrays;
 
   constructor(
@@ -169,6 +173,9 @@ class RequestWrapper {
     this._followRedirects = config.followRedirects !== undefined ? config.followRedirects : true;
     this._decompress = config.decompress !== undefined ? config.decompress : true;
     this._cookies = null;
+    this._signal = null;
+    this._multipartFields = null;
+    this._attachments = [];
     this.interceptors = interceptors;
   }
 
@@ -186,8 +193,14 @@ class RequestWrapper {
     return this;
   }
 
-  timeout(ms: number): this {
-    this._timeout = ms;
+  timeout(ms: number | { connect?: number; response?: number; overall?: number }): this {
+    if (typeof ms === 'number') {
+      this._timeout = ms;
+    } else {
+      // Store the overall/connect/response values; _makeRequest will handle granularity
+      this._timeout = ms.overall || ms.connect || ms.response || this._timeout;
+      (this as any)._timeoutOptions = ms;
+    }
     return this;
   }
 
@@ -277,6 +290,32 @@ class RequestWrapper {
     return this;
   }
 
+  signal(abortSignal: AbortSignal): this {
+    this._signal = abortSignal;
+    return this;
+  }
+
+  auth(username: string, password: string): this {
+    const encoded = Buffer.from(`${username}:${password}`).toString('base64');
+    this._headers['Authorization'] = `Basic ${encoded}`;
+    return this;
+  }
+
+  bearerToken(token: string): this {
+    this._headers['Authorization'] = `Bearer ${token}`;
+    return this;
+  }
+
+  multipart(fields: Record<string, any>): this {
+    this._multipartFields = fields;
+    return this;
+  }
+
+  attach(field: string, value: Buffer | NodeJS.ReadableStream, filename: string): this {
+    this._attachments.push({ field, value, filename });
+    return this;
+  }
+
   async exec(): Promise<NklientResponse> {
     if (!this.uri) {
       throw new Error('URI is required');
@@ -300,9 +339,28 @@ class RequestWrapper {
       this._headers
     );
 
+    // Check if already aborted
+    if (this._signal?.aborted) {
+      throw new AbortError();
+    }
+
     // Prepare body
     let body: string | Buffer | undefined = this._body || undefined;
-    if (this._json) {
+    let formData: FormData | null = null;
+
+    if (this._multipartFields || this._attachments.length > 0) {
+      formData = new FormData();
+      if (this._multipartFields) {
+        for (const [key, value] of Object.entries(this._multipartFields)) {
+          formData.append(key, value);
+        }
+      }
+      for (const attachment of this._attachments) {
+        formData.append(attachment.field, attachment.value, { filename: attachment.filename });
+      }
+      Object.assign(headers, formData.getHeaders());
+      // Don't set body here — formData will be piped to the request
+    } else if (this._json) {
       body = JSON.stringify(this._json);
       headers['Content-Type'] = 'application/json';
     } else if (this._form) {
@@ -328,6 +386,7 @@ class RequestWrapper {
       uri: fullUrl,
       headers,
       body,
+      formData: formData || undefined,
       timeout: this._timeout,
       maxRedirects: this._maxRedirects,
       followRedirects: this._followRedirects,
@@ -352,6 +411,11 @@ class RequestWrapper {
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      // Check abort signal before each attempt
+      if (this._signal?.aborted) {
+        throw new AbortError();
+      }
+
       try {
         const response = await this._makeRequest(requestConfig);
 
@@ -381,6 +445,11 @@ class RequestWrapper {
 
         return finalResponse;
       } catch (err) {
+        // If aborted, throw AbortError immediately (don't retry)
+        if ((err as any)?.name === 'AbortError' || this._signal?.aborted) {
+          throw new AbortError();
+        }
+
         lastError = err as Error;
 
         // Don't retry on the last attempt
@@ -439,6 +508,19 @@ class RequestWrapper {
           proxyAgents.set(proxyKey, proxyAgent);
           requestOptions.agent = proxyAgent;
         }
+      }
+
+      // Wire up abort signal
+      const abortHandler = () => {
+        req.destroy();
+        reject(new AbortError());
+      };
+      if (this._signal) {
+        if (this._signal.aborted) {
+          reject(new AbortError());
+          return;
+        }
+        this._signal.addEventListener('abort', abortHandler, { once: true });
       }
 
       const req = httpModule.request(requestOptions, (res) => {
@@ -567,8 +649,42 @@ class RequestWrapper {
         });
       });
 
-      // Set timeout
-      if (config.timeout) {
+      // Set timeout (supports granular timeouts via _timeoutOptions)
+      const timeoutOpts = (this as any)._timeoutOptions;
+      if (timeoutOpts) {
+        // Connect timeout
+        if (timeoutOpts.connect) {
+          req.setTimeout(timeoutOpts.connect, () => {
+            req.destroy();
+            const err = new TimeoutError('Connect timeout');
+            (err as any).code = 'ECONNABORTED';
+            reject(err);
+          });
+        }
+        // Overall timeout
+        if (timeoutOpts.overall) {
+          const overallTimer = setTimeout(() => {
+            req.destroy();
+            const err = new TimeoutError('Request timeout');
+            (err as any).code = 'ETIMEDOUT';
+            reject(err);
+          }, timeoutOpts.overall);
+          req.on('close', () => clearTimeout(overallTimer));
+        }
+        // Response timeout (time after connection for full response)
+        if (timeoutOpts.response) {
+          req.on('response', (res: http.IncomingMessage) => {
+            const responseTimer = setTimeout(() => {
+              req.destroy();
+              const err = new TimeoutError('Response timeout');
+              (err as any).code = 'ETIMEDOUT';
+              reject(err);
+            }, timeoutOpts.response);
+            res.on('end', () => clearTimeout(responseTimer));
+            res.on('close', () => clearTimeout(responseTimer));
+          });
+        }
+      } else if (config.timeout) {
         req.setTimeout(config.timeout, () => {
           req.destroy();
           reject(new TimeoutError());
@@ -576,15 +692,22 @@ class RequestWrapper {
       }
 
       req.on('error', (err: Error) => {
+        // Cleanup abort handler
+        if (this._signal) {
+          this._signal.removeEventListener('abort', abortHandler);
+        }
         reject(err);
       });
 
-      // Write body if present
-      if (config.body) {
-        req.write(config.body);
+      // Write body or pipe formData
+      if (config.formData) {
+        config.formData.pipe(req);
+      } else {
+        if (config.body) {
+          req.write(config.body);
+        }
+        req.end();
       }
-
-      req.end();
     });
   }
 

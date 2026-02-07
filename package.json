@@ -1,6 +1,6 @@
 {
   "name": "nklient",
-  "version": "2.0.0-alpha.2",
+  "version": "2.0.0-alpha.3",
   "description": "Secure, observable HTTP client for Node.js with schema-validated config, retry logic, and fluent API",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -10,8 +10,8 @@
     "pretest": "npm run build",
     "test": "mocha ./tests/ --timeout 15000 --reporter spec",
     "test:watch": "mocha ./tests/ --timeout 15000 --reporter spec --watch",
-    "test:coverage": "nyc --reporter=html --reporter=text --reporter=lcov mocha ./tests/ --timeout 15000",
-    "test:ci": "nyc --reporter=lcov mocha ./tests/ --timeout 15000 --reporter spec",
+    "test:coverage": "c8 --include 'dist/**/*.js' --exclude 'node_modules/**' --reporter html --reporter text --reporter lcov --check-coverage --lines 90 --functions 85 --branches 80 mocha ./tests/ --timeout 15000",
+    "test:ci": "c8 --include 'dist/**/*.js' --exclude 'node_modules/**' --reporter lcov mocha ./tests/ --timeout 15000 --reporter spec",
     "test:memory": "NODE_OPTIONS=\"--expose-gc --max-old-space-size=512\" mocha ./tests/memory-leaks.test.js --timeout 60000",
     "test:oom": "NODE_OPTIONS=\"--expose-gc --max-old-space-size=512\" npm test",
     "benchmark": "node --expose-gc scripts/benchmarks.js",
@@ -59,6 +59,7 @@
   "dependencies": {
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
+    "form-data": "^4.0.5",
     "http-proxy-agent": "^7.0.0",
     "https-proxy-agent": "^7.0.2",
     "lru-cache": "^11.2.1",
@@ -67,6 +68,7 @@
   "devDependencies": {
     "@types/node": "^20.10.5",
     "@types/tough-cookie": "^4.0.5",
+    "c8": "^10.1.3",
     "chai": "^4.3.10",
     "eslint": "^8.56.0",
     "eslint-config-standard": "^17.1.0",

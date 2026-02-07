@@ -50,3 +50,10 @@ export class ResponseTooLargeError extends NklientError {
     this.maxSize = maxSize;
   }
 }
+
+export class AbortError extends NklientError {
+  constructor(message = 'The operation was aborted') {
+    super(message, 'ERR_ABORTED');
+    this.name = 'AbortError';
+  }
+}
