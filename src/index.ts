@@ -1,13 +1,16 @@
 import * as http from 'http';
 import * as https from 'https';
 import * as zlib from 'zlib';
+import { PassThrough } from 'stream';
 import * as querystring from 'querystring';
 import { LRUCache } from 'lru-cache';
+import { HttpProxyAgent } from 'http-proxy-agent';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import { urlCache } from './util/url-cache';
 import { addQueryToUrl } from './util/query-builder';
 import ConfigLoader from './config/ConfigLoader';
 import { globalCookieJar, CookieJar } from './cookie/globalCookieJar';
-import { TimeoutError } from './errors';
+import { TimeoutError, RetryExhaustedError } from './errors';
 import {
   ClientConfig,
   RequestConfig,
@@ -338,18 +341,65 @@ class RequestWrapper {
       }
     }
 
-    // Make the actual request
-    const response = await this._makeRequest(requestConfig);
+    // Make the actual request (with retry logic if configured)
+    const retryConfig = this._retry;
+    const maxAttempts = retryConfig?.attempts || 1;
+    const retryDelay = retryConfig?.delay || 1000;
+    const backoffMultiplier = retryConfig?.backoffMultiplier || 2;
+    const maxDelay = retryConfig?.maxDelay || 30000;
+    const retryOnStatusCodes = retryConfig?.retryOnStatusCodes || [408, 429, 500, 502, 503, 504];
 
-    // Apply response interceptors
-    let finalResponse = response;
-    for (const interceptor of this.interceptors.response) {
-      if (interceptor) {
-        finalResponse = await interceptor(finalResponse);
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const response = await this._makeRequest(requestConfig);
+
+        // Check if status code is retryable
+        if (maxAttempts > 1 && retryOnStatusCodes.includes(response.statusCode)) {
+          if (attempt < maxAttempts) {
+            // Wait before retrying
+            const delay = Math.min(retryDelay * Math.pow(backoffMultiplier, attempt - 1), maxDelay);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            lastError = new Error(`Server responded with ${response.statusCode}`);
+            continue;
+          }
+          // Last attempt still returned a retryable status - throw
+          throw new RetryExhaustedError(
+            maxAttempts,
+            new Error(`Server responded with ${response.statusCode}`)
+          );
+        }
+
+        // Apply response interceptors
+        let finalResponse = response;
+        for (const interceptor of this.interceptors.response) {
+          if (interceptor) {
+            finalResponse = await interceptor(finalResponse);
+          }
+        }
+
+        return finalResponse;
+      } catch (err) {
+        lastError = err as Error;
+
+        // Don't retry on the last attempt
+        if (attempt >= maxAttempts) {
+          // If retry was configured (more than 1 attempt) and all failed, throw RetryExhaustedError
+          if (maxAttempts > 1) {
+            throw new RetryExhaustedError(maxAttempts, lastError);
+          }
+          throw lastError;
+        }
+
+        // Wait before retrying on network errors
+        const delay = Math.min(retryDelay * Math.pow(backoffMultiplier, attempt - 1), maxDelay);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
 
-    return finalResponse;
+    // Should never reach here, but TypeScript needs it
+    throw lastError || new Error('Unexpected retry state');
   }
 
   private _makeRequest(config: RequestConfig, redirectCount = 0): Promise<NklientResponse> {
@@ -376,12 +426,18 @@ class RequestWrapper {
       };
 
       if (this._proxy) {
-        const proxyKey = this._proxy;
+        const proxyKey = `${this._proxy}:${protocol}`;
         if (proxyAgents.has(proxyKey)) {
           requestOptions.agent = proxyAgents.get(proxyKey);
         } else {
-          // Proxy agent creation stub (implemented in Phase 2)
-          requestOptions.agent = undefined;
+          let proxyAgent: http.Agent | https.Agent;
+          if (protocol === 'https') {
+            proxyAgent = new HttpsProxyAgent(this._proxy);
+          } else {
+            proxyAgent = new HttpProxyAgent(this._proxy);
+          }
+          proxyAgents.set(proxyKey, proxyAgent);
+          requestOptions.agent = proxyAgent;
         }
       }
 
@@ -406,10 +462,6 @@ class RequestWrapper {
           return;
         }
 
-        // Handle response
-        const chunks: Buffer[] = [];
-        let totalSize = 0;
-
         // Setup decompression if needed
         let responseStream: NodeJS.ReadableStream = res;
         if (config.decompress && res.headers['content-encoding']) {
@@ -422,6 +474,37 @@ class RequestWrapper {
             responseStream = res.pipe(zlib.createBrotliDecompress());
           }
         }
+
+        // Streaming mode: resolve with the stream as body immediately
+        if (this._stream) {
+          // Pipe through a PassThrough so we always return a proper Readable
+          const passThrough = new PassThrough();
+          (responseStream as NodeJS.ReadableStream).pipe(passThrough);
+          // Forward errors from source stream to passThrough
+          (responseStream as NodeJS.ReadableStream).on('error', (err: Error) => {
+            passThrough.destroy(err);
+          });
+
+          // Store cookies before resolving
+          const cookiePromise = (this._jar && res.headers['set-cookie'])
+            ? Promise.all(res.headers['set-cookie'].map(cookie =>
+                setCookieHelper(cookie, config.uri, this._jar!).catch(() => {})
+              ))
+            : Promise.resolve();
+
+          cookiePromise.then(() => {
+            resolve({
+              statusCode: res.statusCode!,
+              headers: res.headers as NklientResponse['headers'],
+              body: passThrough as any
+            });
+          });
+          return;
+        }
+
+        // Buffered mode: collect chunks then resolve
+        const chunks: Buffer[] = [];
+        let totalSize = 0;
 
         responseStream.on('data', (chunk: Buffer) => {
           chunks.push(chunk);
@@ -444,19 +527,16 @@ class RequestWrapper {
         responseStream.on('end', () => {
           let body: any = Buffer.concat(chunks);
 
-          // Parse body based on content type and encoding
-          if (!this._stream) {
-            if (this._encoding === null) {
-              // Return raw buffer
-            } else if (this._encoding) {
-              body = body.toString(this._encoding);
+          if (this._encoding === null) {
+            // Return raw buffer
+          } else if (this._encoding) {
+            body = body.toString(this._encoding);
 
-              if (res.headers['content-type'] && res.headers['content-type'].includes('application/json')) {
-                try {
-                  body = JSON.parse(body);
-                } catch (_e) {
-                  // Keep as string if JSON parsing fails
-                }
+            if (res.headers['content-type'] && res.headers['content-type'].includes('application/json')) {
+              try {
+                body = JSON.parse(body);
+              } catch (_e) {
+                // Keep as string if JSON parsing fails
               }
             }
           }

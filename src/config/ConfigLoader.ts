@@ -36,7 +36,7 @@ const schema = {
       "type": "object",
       "description": "Retry policy configuration",
       "properties": {
-        "attempts": { "type": "integer", "minimum": 0, "default": 3 },
+        "attempts": { "type": "integer", "minimum": 0, "default": 1 },
         "delay": { "type": "integer", "minimum": 0, "default": 1000 },
         "maxDelay": { "type": "integer", "minimum": 0, "default": 30000 },
         "retryOnStatusCodes": {
@@ -86,7 +86,7 @@ class ConfigLoader {
       timeout: 30000,
       maxRedirects: 5,
       retry: {
-        attempts: 3,
+        attempts: 1,
         delay: 1000,
         maxDelay: 30000,
         retryOnStatusCodes: [408, 429, 500, 502, 503, 504],

@@ -174,11 +174,11 @@ describe('createClient', () => {
       }
     });
 
-    it.skip('should use client-level retry configuration', async () => {
+    it('should use client-level retry configuration', async () => {
       const client = nklient.createClient({
         retry: {
           attempts: 2,
-          delay: 50,
+          delay: 10,
           retryOnStatusCodes: [503]
         }
       });

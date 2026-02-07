@@ -110,17 +110,27 @@ describe('Cleanup Verification Tests', () => {
         .get('/stream-error')
         .reply(200, () => {
           const { Readable } = require('stream');
+          let pushed = false;
           return new Readable({
             read() {
-              this.emit('error', new Error('Stream error'));
+              if (!pushed) {
+                pushed = true;
+                this.destroy(new Error('Stream error'));
+              }
             }
           });
         });
 
+      // In stream mode, exec() resolves with the stream; errors appear on the stream
+      const response = await nklient.get('http://example.com/stream-error')
+        .stream()
+        .exec();
+
+      // Consume the stream and expect the error
       try {
-        await nklient.get('http://example.com/stream-error')
-          .stream()
-          .exec();
+        for await (const _chunk of response.body) {
+          // drain
+        }
         expect.fail('Should have thrown error');
       } catch (error) {
         expect(error.message).to.include('Stream error');
@@ -134,7 +144,7 @@ describe('Cleanup Verification Tests', () => {
       // Check that error streams are cleaned up
       const handles = process._getActiveHandles();
       const streams = handles.filter(h => h.constructor.name.includes('Stream'));
-      
+
       expect(streams.length).to.be.lessThan(5);
     });
   });
